@@ -1,9 +1,11 @@
 # gps-connector
-A FIWARE-based stack focusing on GPS device IoT data producers.
+_A FIWARE-based stack focusing on GPS device IoT data producers._
+
 This project was spawned from OS2FleetOptimiser and is being developed collaboratively across public-sector organisations in Denmark to simplify and scale GPS data ingestion for fleet optimisation and smart-city use cases.
+
 This repository is a sandbox/experimentation project.
 
-#### Background & Motivation
+### Background & Motivation
 OS2FleetOptimiser relies on GPS data to produce aggregated trips and fleet insights. 
 The original motivation for this project is scaling to make it easier and cheaper for organisations to get started with OS2FleetOptimiser by providing a simpler, more standardized setup for collecting data directly from GPS devices.
 A secondary motivation is to establish a foundation for a Smart City connector component that is:
@@ -11,39 +13,40 @@ A secondary motivation is to establish a foundation for a Smart City connector c
 - reusable in other OS2/municipal contexts
 - aligned with common open standards and FIWARE patterns
 
-#### Scope
+
+### Project participants
+This sandbox project is developed and explored together with:
+- OS2FleetOptimiser user group (15 public organisations in Denmark)
+    - @sobuos
+- Droids Agency 
+    - @andreasDroid
+- OS2 Secretariat 
+    -@janhalen
+- Teknik og Miljø Forvaltningen, City of Copenhagen 
+    - @Lyneborg
+    - @baffioso
+    - @jschristensen
+    - @A013kkpuma
+    - @adamal
+
+### Scope
 This is an early-stage sandbox project intended to explore and validate:
 •	ingestion of GPS device data from IoT producers,
 •	broker/agent patterns proposed by OS2,
 •	a minimal FIWARE stack that can be adopted incrementally.
 **Not yet a production-ready connector!** 
 
-#### Architecture
+### Architecture
 The stack follows the OS2 proposal ("*Architectural proposal*")[https://janhalen.github.io/enterprise-architecture-patterns/proposals/2025-09-25-gps-agent-and-standard-broker.html]. 
+
 In short, the proposal aims to enable direct device support by combining open-source components and standardized data flows, making GPS integrations simpler to replicate and scale. 
  
--	Måske et billede af arkitekturen her?
-
-#### Project participants
-This sandbox is developed and explored together with:
-- OS2FleetOptimiser user group (15 public organisations in Denmark)
-- Teknik og Miljø Forvaltningen, City of Copenhagen 
-- Droids Agency
-- OS2 Secretariat
-
-https://github.com/andreasDroid, https://github.com/janhalen, https://github.com/Lyneborg, https://github.com/baffioso, https://github.com/jschristensen, https://github.com/A013kkpuma, https://github.com/adamal
-
-#### Relationship to OS2FleetOptimiser
+### Relationship to OS2FleetOptimiser
 OS2FleetOptimiser is an open-source fleet optimisation solution in Denmark, now anchored in OS2 and used across multiple authorities. 
 This project aims to reduce onboarding complexity for new adopters by offering a smaller, more repeatable device-to-broker GPS ingestion approach.
 Relevant links:
 - (OS2FleetOptimiser GitHub org)[https://github.com/OS2fleetoptimiser]
-- (OS2 community)[https://www.os2.eu/]
-
-#### Status
-- Type: Sandbox / proof-of-concept
-- Maturity: Early exploration
-- Releases: None yet GitHub
+- (OS2 community)([https://www.os2.eu/]
 
 #### Contributing
 Contributions, experiments, and feedback are welcome!
