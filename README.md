@@ -45,8 +45,8 @@ In short, the proposal aims to enable direct device support by combining open-so
 OS2FleetOptimiser is an open-source fleet optimisation solution in Denmark, now anchored in OS2 and used across multiple authorities. 
 This project aims to reduce onboarding complexity for new adopters by offering a smaller, more repeatable device-to-broker GPS ingestion approach.
 Relevant links:
-- (OS2FleetOptimiser GitHub org)[https://github.com/OS2fleetoptimiser]
-- (OS2 community)([https://www.os2.eu/]
+- [OS2FleetOptimiser GitHub org](https://github.com/OS2fleetoptimiser)
+- [OS2 community](https://www.os2.eu/)
 
 #### Contributing
 Contributions, experiments, and feedback are welcome!
