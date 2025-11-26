@@ -37,8 +37,8 @@ https://github.com/andreasDroid, https://github.com/janhalen, https://github.com
 OS2FleetOptimiser is an open-source fleet optimisation solution in Denmark, now anchored in OS2 and used across multiple authorities. 
 This project aims to reduce onboarding complexity for new adopters by offering a smaller, more repeatable device-to-broker GPS ingestion approach.
 Relevant links:
-- (OS2FleetOptimiser GitHub org)[https://github.com/OS2fleetoptimiser GitHub+2os2fleetoptimiser.github.io+2]
-- (OS2 community)[https://www.os2.eu/ os2.eu]
+- (OS2FleetOptimiser GitHub org)[https://github.com/OS2fleetoptimiser]
+- (OS2 community)[https://www.os2.eu/]
 
 #### Status
 - Type: Sandbox / proof-of-concept
