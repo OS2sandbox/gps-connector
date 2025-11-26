@@ -15,13 +15,24 @@ A secondary motivation is to establish a foundation for a Smart City connector c
 
 
 ### Project participants
-This sandbox project is developed and explored together with:
+For questions or collaboration, reach out to the product secretary on email.
+
+os2fleetoptimiser@os2.eu  
+
+<img src="assets/os2fleetoptimiser_mail.png" alt="QR Code" style="width: 110px; height: 110px;">
+
+(scan for email)
+
+<br>
+
+#### This sandbox project is developed and explored together with:
 - OS2FleetOptimiser user group (15 public organisations in Denmark)
     - @sobuos
 - Droids Agency 
     - @andreasDroid
-- OS2 Secretariat 
-    -@janhalen
+- OS2 Secretariat
+ 
+    - @janhalen
 - Teknik og Miljø Forvaltningen, City of Copenhagen 
     - @Lyneborg
     - @baffioso
@@ -48,7 +59,7 @@ Relevant links:
 - [OS2FleetOptimiser GitHub org](https://github.com/OS2fleetoptimiser)
 - [OS2 community](https://www.os2.eu/)
 
-#### Contributing
+### Contributing
 Contributions, experiments, and feedback are welcome!
 Suggested ways to contribute:
 - try the stack on real GPS devices/vendors,
@@ -57,7 +68,7 @@ Suggested ways to contribute:
 - align with FIWARE and OS2 architecture patterns.
 If you want to contribute, please open an issue or draft a PR.
 
-#### License
+### License
 This project is licensed under *AGPL-3.0*.
 See LICENSE for details.
 
