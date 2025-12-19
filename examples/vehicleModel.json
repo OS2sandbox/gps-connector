@@ -1,0 +1,39 @@
+{
+    "id": "urn:ngsi-ld:VehicleModel:tesla-model3-2022",
+    "type": "VehicleModel",
+    "name": {
+        "type": "Property",
+        "value": "Tesla Model 3 2022"
+    },
+    "brandName": {
+        "type": "Property",
+        "value": "Tesla"
+    },
+    "modelName": {
+        "type": "Property",
+        "value": "Model 3"
+    },
+    "manufacturerName": {
+        "type": "Property",
+        "value": "Tesla"
+    },
+    "vehicleType": {
+        "type": "Property",
+        "value": "car"
+    },
+    "fuelType": {
+        "type": "Property",
+        "value": "electric"
+    },
+    "tractionBatteryCapacity": {
+        "type": "Property",
+        "value": 52
+    },
+    "@context": [
+        "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+        "https://smart-data-models.github.io/dataModel.Transportation/context.jsonld",
+        {
+            "tractionBatteryCapacity": "https://example.org/transport/tractionBatteryCapacity"
+        }
+    ]
+}
