@@ -1,0 +1,96 @@
+{
+    "id": "urn:ngsi-ld:Vehicle:AB12345",
+    "type": "Vehicle",
+    "vehicleType": {
+        "type": "Property",
+        "value": "car"
+    },
+    "category": {
+        "type": "Property",
+        "value": [
+            "private",
+            "tracked"
+        ]
+    },
+    "vehiclePlateIdentifier": {
+        "type": "Property",
+        "value": "AB12345"
+    },
+    "refVehicleModel": {
+        "type": "Relationship",
+        "object": "urn:ngsi-ld:VehicleModel:tesla-model3-2022"
+    },
+    "leasingInfo": {
+        "type": "Property",
+        "value": {
+            "leasingType": "Operating Lease",
+            "leasingStartDate": "2025-06-01T00:00:00.000Z",
+            "leasingEndDate": "2029-06-01T00:00:00.000Z",
+            "monthlyLeaseCost": 525,
+            "allowedAnnualDistance": 20000,
+            "allowedDistanceUnit": "kilometer",
+            "excessDistanceCost": 1,
+            "leasingProvider": "Municipality Leasing A/S"
+        }
+    },
+    "fuelType": {
+        "type": "Property",
+        "value": "electric"
+    },
+    "mileageFromOdometer": {
+        "type": "Property",
+        "value": 12345
+    },
+    "speed": {
+        "type": "Property",
+        "value": 37.2
+    },
+    "ignitionStatus": {
+        "type": "Property",
+        "value": true
+    },
+    "serviceStatus": {
+        "type": "Property",
+        "value": "parked"
+    },
+    "address": {
+        "type": "Property",
+        "value": {
+            "type": "PostalAddress",
+            "streetAddress": "Rådhuspladsen 1",
+            "postalCode": "1550",
+            "addressLocality": "København V",
+            "addressCountry": "DK"
+        }
+    },
+    "location": {
+        "type": "GeoProperty",
+        "value": {
+            "type": "Point",
+            "coordinates": [
+                12.5683,
+                55.6761
+            ]
+        },
+        "observedAt": "2025-12-16T10:15:00Z"
+    },
+    "observationDateTime": {
+        "type": "Property",
+        "value": "2025-12-16T10:15:00Z"
+    },
+    "@context": [
+        "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+        "https://smart-data-models.github.io/dataModel.Transportation/context.jsonld",
+        {
+            "leasingInfo": "https://example.org/transport/leasingInfo",
+            "leasingType": "https://example.org/transport/leasingType",
+            "leasingStartDate": "https://example.org/transport/leasingStartDate",
+            "leasingEndDate": "https://example.org/transport/leasingEndDate",
+            "monthlyLeaseCost": "https://example.org/transport/monthlyLeaseCost",
+            "allowedAnnualDistance": "https://example.org/transport/allowedAnnualDistance",
+            "allowedDistanceUnit": "https://example.org/transport/allowedDistanceUnit",
+            "excessDistanceCost": "https://example.org/transport/excessDistanceCost",
+            "leasingProvider": "https://example.org/transport/leasingProvider"
+        }
+    ]
+}
