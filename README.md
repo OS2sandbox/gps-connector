@@ -1,155 +1,89 @@
-NGSI-LD GPS Connector – FIWARE Examples
+# gps-connector
 
-This repository contains working **NGSI-LD examples** demonstrating how GPS data
-can be mapped to **FIWARE Smart Data Models (Transportation)** and processed end-to-end
-through **Orion-LD** and **QuantumLeap**.
+_A FIWARE-based stack focusing on GPS device IoT data producers._
 
-The goal is to provide **gap-free, reproducible examples** for testing and validating
-a GPS connector pipeline.
+This project was spawned from OS2FleetOptimiser and is being developed collaboratively across public-sector organisations in Denmark to simplify and scale GPS data ingestion for fleet optimisation and smart-city use cases.
 
-## Scope
+This repository is a sandbox/experimentation project.
 
-The examples cover:
+### Background & Motivation
 
-- `Vehicle` and `VehicleModel` entities based on **Smart Data Models – Transportation**
-- GPS telemetry ingestion (location, speed, ignition status, timestamp)
-- Orion-LD subscriptions forwarding data to QuantumLeap
-- Time-series persistence in **TimescaleDB** and entity metadata in **CrateDB**
+OS2FleetOptimiser relies on GPS data to produce aggregated trips and fleet insights.
+The original motivation for this project is scaling to make it easier and cheaper for organisations to get started with OS2FleetOptimiser by providing a simpler, more standardized setup for collecting data directly from GPS devices.
+A secondary motivation is to establish a foundation for a Smart City connector component that is:
 
-Temporary model extensions are included for:
+- interoperable across vendors and solutions
+- reusable in other OS2/municipal contexts
+- aligned with common open standards and FIWARE patterns
 
-- `leasingInfo` (Vehicle)
-- `tractionBatteryCapacity` (VehicleModel)
+### Project participants
 
----
+For questions or collaboration, reach out to the product secretary on email.
 
-## GPS → NGSI-LD → FIWARE Smart Data Models Mapping
+os2fleetoptimiser@os2.eu
 
-| GPS Connector Field       | Target Entity          | NGSI-LD Attribute         | NGSI-LD Type | Expected Data Type | Format / Unit              | Notes                                                                             |
-| ------------------------- | ---------------------- | ------------------------- | ------------ | ------------------ | -------------------------- | --------------------------------------------------------------------------------- |
-| `id`                      | Vehicle                | `id`                      | Entity ID    | string             | `urn:ngsi-ld:Vehicle:<id>` | GPS id is mapped to the NGSI-LD URN.                                              |
-| `timestamp`               | Vehicle                | `observationDateTime`     | Property     | string             | ISO 8601 (UTC)             | Timestamp of the GPS observation.                                                 |
-| `latitude` / `longitude`  | Vehicle                | `location`                | GeoProperty  | object             | GeoJSON Point (WGS84)      | Coordinates must be `[longitude, latitude]`.                                      |
-| `speed`                   | Vehicle                | `speed`                   | Property     | number             | km/h                       | Defined in Smart Data Models Vehicle schema.                                      |
-| `ignitionStatus`          | Vehicle                | `ignitionStatus`          | Property     | boolean / string   | `true/false` or `on/off`   | Defined in Smart Data Models Vehicle schema. Use one representation consistently. |
-| `license_plate`           | Vehicle                | `vehiclePlateIdentifier`  | Property     | string             | text                       | Official Smart Data Models attribute for license plate.                           |
-| `vehicleModelId`          | Vehicle                | `refVehicleModel`         | Relationship | string             | URN                        | Links Vehicle to its VehicleModel entity.                                         |
-| `vehicleType`             | Vehicle / VehicleModel | `vehicleType`             | Property     | string             | enum                       | Example: `car`, `van`, `truck`.                                                   |
-| `fuelType`                | Vehicle / VehicleModel | `fuelType`                | Property     | string             | enum                       | Example: `petrol`, `diesel`, `electric`.                                          |
-| `mileage`                 | Vehicle                | `mileageFromOdometer`     | Property     | number             | km                         | Optional; only if available from GPS.                                             |
-| `serviceStatus`           | Vehicle                | `serviceStatus`           | Property     | string             | enum                       | Used to trigger updates and subscriptions.                                        |
-| `address`                 | Vehicle                | `address`                 | Property     | object             | PostalAddress              | Optional; populated via reverse geocoding.                                        |
-| `category`                | Vehicle                | `category`                | Property     | string / array     | text                       | Optional classification.                                                          |
-| `leasingInfo.*`           | Vehicle                | `leasingInfo`             | Property     | object             | custom object              | Temporary extension, documented via example.                                      |
-| `tractionBatteryCapacity` | VehicleModel           | `tractionBatteryCapacity` | Property     | number             | kWh                        | VehicleModel-level attribute.                                                     |
+<img src="assets/os2fleetoptimiser_mail.png" alt="QR Code" style="width: 110px; height: 110px;">
 
----
+(scan for email)
 
-### Data Type and Format Conventions
+<br>
 
-The following conventions apply across all examples and implementations:
+#### This sandbox project is developed and explored together with:
 
-**Entity IDs**:
+- OS2FleetOptimiser user group (15 public organisations in Denmark)
+  - @sobuos
+- Droids Agency
+  - @andreasDroid
+- OS2 Secretariat
 
-- Vehicles: urn:ngsi-ld:Vehicle:<id>
+  - @janhalen
 
-- VehicleModels: urn:ngsi-ld:VehicleModel:<id>
+- Teknik og Miljø Forvaltningen, City of Copenhagen
+  - @Lyneborg
+  - @baffioso
+  - @jschristensen
+  - @A013kkpuma
+  - @adamal
 
-**Time:**
+### Scope
 
-- observationDateTime MUST be an ISO 8601 timestamp (UTC recommended).
+This is an early-stage sandbox project intended to explore and validate:
+• ingestion of GPS device data from IoT producers,
+• broker/agent patterns proposed by OS2,
+• a minimal FIWARE stack that can be adopted incrementally.
+**Not yet a production-ready connector!**
 
-**Location**:
+### Architecture
 
-- location MUST be a GeoJSON Point with coordinates [longitude, latitude]
+The stack follows the OS2 proposal ("_Architectural proposal_")[https://janhalen.github.io/enterprise-architecture-patterns/proposals/2025-09-25-gps-agent-and-standard-broker.html].
 
-**Speed**:
+In short, the proposal aims to enable direct device support by combining open-source components and standardized data flows, making GPS integrations simpler to replicate and scale.
 
-- speed is expressed in km/h
+### Relationship to OS2FleetOptimiser
 
-- The same unit MUST be used consistently by the GPS connector.
+OS2FleetOptimiser is an open-source fleet optimisation solution in Denmark, now anchored in OS2 and used across multiple authorities.
+This project aims to reduce onboarding complexity for new adopters by offering a smaller, more repeatable device-to-broker GPS ingestion approach.
+Relevant links:
 
-**Ignition status**
+- [OS2FleetOptimiser GitHub org](https://github.com/OS2fleetoptimiser)
+- [OS2 community](https://www.os2.eu/)
 
-- ignitionStatus MUST use a single representation across all entities:
+### Contributing
 
-- either boolean (true / false)
+Contributions, experiments, and feedback are welcome!
+Suggested ways to contribute:
 
-- or string (on / off)
+- try the stack on real GPS devices/vendors,
+- validate mapping to common data models,
+- propose improvements to deployment simplicity,
+- align with FIWARE and OS2 architecture patterns.
+  If you want to contribute, please open an issue or draft a PR.
 
-### JSON-LD Entity and Subscription Examples
+### License
 
-Full, working JSON-LD examples are provided in the examples/ directory:
+This project is licensed under _AGPL-3.0_.
+See LICENSE for details.
 
-- vehicle.json — Vehicle entity (Smart Data Models Transportation)
+#### Contact
 
-- vehicle-model.json — VehicleModel entity
-
-- subscription-vehicle.json — Orion-LD → QuantumLeap subscription
-
-- subscription-vehiclemodel.json — VehicleModel subscription
-
-#### These examples:
-
-can be created directly in Orion-LD
-
-trigger notifications to QuantumLeap
-
-result in time-series persistence in TimescaleDB
-
-## Repository Structure
-
-├── docker-compose.yml # Local FIWARE setup
-├── examples/
-│ ├── vehicle.json
-│ ├── vehicle-model.json
-│ ├── subscription-vehicle.json
-│ └── subscription-vehiclemodel.json
-|
-├── README.md
-
-### Local Setup
-
-Start the FIWARE stack locally:
-
-```bash
-docker compose up -d
-```
-
-## Usage
-
-1. Create subscriptions (Orion-LD → QuantumLeap)
-
-```d
-
-cd ./examples
-
-  curl -i -X POST   -H 'Content-Type: application/ld+json'   -H 'NGSILD-Tenant: default'   -H 'NGSILD-PATH: /'   --data @subscription-vehicleModel.json   http://localhost:1026/ngsi-ld/v1/subscriptions
-
-
-  curl -i -X POST   -H 'Content-Type: application/ld+json'   -H 'NGSILD-Tenant: default'   -H 'NGSILD-PATH: /'   --data @subscription-vehicle.json   http://localhost:1026/ngsi-ld/v1/subscriptions
-
-```
-
-2. Create entities (VehicleModel first)
-
-```d
-
-curl -i -X POST   -H 'Content-Type: application/ld+json'   -H 'NGSILD-Tenant: default'   -H 'NGSILD-PATH: /'   --data @vehicleModel.json   http://localhost:1026/ngsi-ld/v1/entities
-
-
-curl -i -X POST   -H 'Content-Type: application/ld+json'   -H 'NGSILD-Tenant: default'   -H 'NGSILD-PATH: /'   --data @vehicle.json   http://localhost:1026/ngsi-ld/v1/entities
-
-```
-
-3. Trigger one notification (PATCH Vehicle)
-
-```
-
-curl -i -X PATCH   -H 'Content-Type: application/json'   -H 'Link: <https://smart-data-models.github.io/dataModel.Transportation/context.jsonld>; rel="http://www.w3.org/ns/json-ld#context"; type="application/ld+json"'   -H 'NGSILD-Tenant: default'   -H 'NGSILD-PATH: /'   --data '{
-    "serviceStatus": {
-      "type": "Property",
-      "value": "moving"
-    }
-  }'   http://localhost:1026/ngsi-ld/v1/entities/urn:ngsi-ld:Vehicle:AB12345/attrs
-```
+For questions or collaboration, reach out to the product secretary on os2fleetoptimiser@os2.eu.
