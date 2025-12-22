@@ -1,0 +1,92 @@
+services:
+  mongo:
+    image: mongo:4.2
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+
+  orion:
+    image: fiware/orion-ld:latest
+    depends_on:
+      - mongo
+    ports:
+      - "1026:1026"
+    command: ["-logLevel", "INFO", "-dbhost", "mongo"]
+
+  crate:
+    image: crate:${CRATE_VERSION:-4.6.7}
+    command: crate -Cauth.host_based.enabled=false
+      -Ccluster.name=democluster -Chttp.cors.enabled=true -Chttp.cors.allow-origin="*"
+    environment:
+      - LOG4J_FORMAT_MSG_NO_LOOKUPS=true
+    ports:
+      # Admin UI
+      - "4200:4200"
+      # Transport protocol
+      - "4300:4300"
+    volumes:
+      - cratedata:/data
+
+  timescale:
+    image: timescale/timescaledb-ha:${TIMESCALE_VERSION:-pg13.16-ts2.15.3-oss}
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: quantumleap
+      POSTGRES_USER: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d quantumleap -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:6.2
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  quantumleap-db-setup:
+    image: orchestracities/quantumleap-pg-init
+    depends_on:
+      timescale:
+        condition: service_healthy
+    restart: on-failure
+    environment:
+      PG_HOST: timescale
+      PG_PORT: 5432
+      PG_USERNAME: postgres
+      PG_PASS: postgres
+      QL_DB_NAME: quantumleap
+      QL_DB_USER: postgres
+      QL_DB_PASS: postgres
+      QL_DB_INIT_DIR: /init
+
+  quantumleap:
+    image: orchestracities/quantumleap:${QL_VERSION:-latest}
+    hostname: quantumleap
+    ports:
+      - "8668:8668"
+    depends_on:
+      - crate
+      - redis
+      - timescale
+    environment:
+      - CRATE_HOST=crate
+      - REDIS_HOST=redis
+      - QL_DEFAULT_DB=crate
+      - POSTGRES_HOST=timescale
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB_NAME=quantumleap
+      - POSTGRES_DB_USER=postgres
+      - POSTGRES_DB_PASS=postgres
+volumes:
+  mongodata:
+  cratedata:
+  timescaledata:
+  redisdata:
