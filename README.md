@@ -30,6 +30,8 @@ os2fleetoptimiser@os2.eu
     - @sobuos
 - Droids Agency 
     - @andreasDroid
+    - @yousraDroids
+    - @DanielDroids
 - OS2 Secretariat
  
     - @janhalen
