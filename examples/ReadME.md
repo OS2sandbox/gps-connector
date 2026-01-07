@@ -101,8 +101,6 @@ Full, working JSON-LD examples are provided in the examples/ directory:
 
 - subscription-vehicle.json — Orion-LD → QuantumLeap subscription
 
-- subscription-vehiclemodel.json — VehicleModel subscription
-
 #### These examples:
 
 can be created directly in Orion-LD
@@ -113,8 +111,9 @@ result in time-series persistence in TimescaleDB
 
 ## Repository Structure
 
-├── docker-compose.yml # Local FIWARE setup
 ├── examples/
+├── README.md
+├── docker-compose.yml # Local FIWARE setup
 │ ├── vehicle.json
 │ ├── vehicle-model.json
 │ ├── subscription-vehicle.json
@@ -159,10 +158,6 @@ docker compose up -d
 ```d
 
 cd ./examples
-
-  curl -i -X POST   -H 'Content-Type: application/ld+json'   -H 'NGSILD-Tenant: default'   -H 'NGSILD-PATH: /'   --data @subscription-vehicleModel.json   http://localhost:1026/ngsi-ld/v1/subscriptions
-
-
   curl -i -X POST   -H 'Content-Type: application/ld+json'   -H 'NGSILD-Tenant: default'   -H 'NGSILD-PATH: /'   --data @subscription-vehicle.json   http://localhost:1026/ngsi-ld/v1/subscriptions
 
 ```
@@ -199,11 +194,65 @@ curl 'http://localhost:8668/v2/entities/urn:ngsi-ld:Vehicle:AB12345/attrs/locati
 
 ```
 
-**Orion query example**
+## Orion-LD Query Examples
+
+The following examples show how to query **Orion-LD** for `Vehicle` entities.
+When using **short attribute names** (e.g. `Vehicle`, `owner`), a JSON-LD context
+must be provided via the `Link` header.
+
+---
+
+### Get a single Vehicle by id
+
+```bash
+curl 'http://localhost:1026/ngsi-ld/v1/entities/urn:ngsi-ld:Vehicle:AB12345' \
+  -H 'NGSILD-Tenant: default'
 
 ```
 
- curl 'http://localhost:1026/ngsi-ld/v1/entities/urn:ngsi-ld:Vehicle:AB12345' \
+### Get VehicleModel from context broker
+
+VehicleModel is stored as master data in the Context Broker and is retrieved on demand via a direct GET /ngsi-ld/v1/entities/{vehicleModelId} request using the refVehicleModel relationship from the Vehicle entity
+
+```
+curl 'http://localhost:1026/ngsi-ld/v1/entities/urn:ngsi-ld:VehicleModel:tesla-model3-2022' \
   -H 'NGSILD-Tenant: default'
+```
+
+### Define Transportation context
+
+The context is required to use short names instead of fully qualified IRIs.
+
+```
+CTX='https://smart-data-models.github.io/dataModel.Transportation/context.jsonld'
+```
+
+**List Vehicle with short terms**
+
+```bash
+curl "http://localhost:1026/ngsi-ld/v1/entities?type=Vehicle&attrs=owner,vehiclePlateIdentifier,refVehicleModel" \
+  -H 'NGSILD-Tenant: default' \
+  -H "Link: <$CTX>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\""
+
+```
+
+**Filter: Vehicle by owner**
+
+```bash
+ORG="urn:ngsi-ld:Organization:Municipality-Leasing-AS"
+
+curl "http://localhost:1026/ngsi-ld/v1/entities?type=Vehicle&q=owner==%22$ORG%22&attrs=owner,vehiclePlateIdentifier,refVehicleModel" \
+  -H 'NGSILD-Tenant: default' \
+  -H "Link: <$CTX>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\""
+
+```
+
+**List Vehicles and their owners**
+
+```
+curl "http://localhost:1026/ngsi-ld/v1/entities?type=Vehicle&attrs=owner,vehiclePlateIdentifier" \
+  -H 'NGSILD-Tenant: default' \
+  -H "Link: <$CTX>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\""
+
 
 ```
