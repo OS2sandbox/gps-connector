@@ -1,0 +1,110 @@
+services:
+  mongo:
+    image: mongo:4.2
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodata:/data/db
+
+  orion:
+    image: fiware/orion-ld:latest
+    depends_on:
+      - mongo
+    ports:
+      - "1026:1026"
+    environment:
+      ORIONLD_MULTI_SERVICE: "TRUE"
+    command: ["-logLevel", "INFO", "-dbhost", "mongo"]
+
+  crate:
+    image: crate:${CRATE_VERSION:-4.6.7}
+    command: crate -Cauth.host_based.enabled=false
+      -Ccluster.name=democluster -Chttp.cors.enabled=true -Chttp.cors.allow-origin="*"
+    environment:
+      - LOG4J_FORMAT_MSG_NO_LOOKUPS=true
+    ports:
+      # Admin UI
+      - "4200:4200"
+      # Transport protocol
+      - "4300:4300"
+    volumes:
+      - cratedata:/data
+
+  redis:
+    image: redis:6.2
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  quantumleap:
+    image: orchestracities/quantumleap:${QL_VERSION:-latest}
+    hostname: quantumleap
+    ports:
+      - "8668:8668"
+    depends_on:
+      - crate
+      - redis
+    environment:
+      - CRATE_HOST=crate
+      - REDIS_HOST=redis
+      - QL_DEFAULT_DB=crate
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    hostname: mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquittodata:/mosquitto/data
+    restart: unless-stopped
+
+  iot-agent:
+    image: fiware/iotagent-json:latest
+    hostname: iot-agent
+    depends_on:
+      - mongo
+      - orion
+      - mosquitto
+    ports:
+      - "4041:4041"   # North Port (Config API)
+      - "7896:7896"   # South Port (Device Data)
+    environment:
+      - IOTA_CB_HOST=orion
+      - IOTA_CB_PORT=1026
+      - IOTA_NORTH_PORT=4041
+      - IOTA_HTTP_PORT=7896
+      - IOTA_REGISTRY_TYPE=mongodb
+      - IOTA_MONGO_HOST=mongo
+      - IOTA_MONGO_PORT=27017
+      - IOTA_MONGO_DB=iotagent-json
+      - IOTA_PROVIDER_URL=http://iot-agent:4041
+      - IOTA_DEFAULT_RESOURCE=/iot/json
+      - IOTA_LOG_LEVEL=DEBUG
+      - IOTA_CB_NGSI_VERSION=ld
+      - IOTA_JSON_LD_CONTEXT=https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld
+      - IOTA_FALLBACK_TENANT=default
+      - IOTA_MULTI_CORE=true
+      - IOTA_MQTT_HOST=mosquitto
+      - IOTA_MQTT_PORT=1883
+      - IOTA_AMQP_DISABLED=true
+    restart: unless-stopped
+
+  bento:
+    image: ghcr.io/warpstreamlabs/bento:latest
+    hostname: bento
+    depends_on:
+      - mosquitto
+      - iot-agent
+      - redis
+    volumes:
+      - ./bento/config.yaml:/bento.yaml:ro
+    restart: unless-stopped
+
+volumes:
+  mongodata:
+  cratedata:
+  redisdata:
+  mosquittodata:
