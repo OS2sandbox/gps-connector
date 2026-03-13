@@ -53,11 +53,9 @@ section "2. Create Service Groups"
 # -------------------------------------------------------
 
 for municipality in naestved copenhagen; do
-  for device_type in ruptela teltonika; do
-    info "Creating service group: ${municipality} / ${device_type}"
-    "${SCRIPT_DIR}/provision-service-group.sh" "${municipality}" "${device_type}" > /dev/null 2>&1 || true
-    success "Service group created: ${municipality} / ${device_type}"
-  done
+  info "Creating service group: ${municipality} / teltonika"
+  "${SCRIPT_DIR}/provision-service-group.sh" "${municipality}" teltonika > /dev/null 2>&1 || true
+  success "Service group created: ${municipality} / teltonika"
 done
 
 # -------------------------------------------------------
@@ -74,32 +72,32 @@ done
 section "4. Provision Devices"
 # -------------------------------------------------------
 
-info "Provisioning Ruptela device 111111111111111 for naestved"
-"${SCRIPT_DIR}/provision-device.sh" naestved 111111111111111 ruptela > /dev/null 2>&1 || true
+info "Provisioning teltonika device 111111111111111 for naestved"
+"${SCRIPT_DIR}/provision-device.sh" naestved 111111111111111 teltonika > /dev/null 2>&1 || true
 success "Device provisioned."
 
 info "Provisioning Teltonika device 222222222222222 for naestved"
 "${SCRIPT_DIR}/provision-device.sh" naestved 222222222222222 teltonika > /dev/null 2>&1 || true
 success "Device provisioned."
 
-info "Provisioning Ruptela device 333333333333333 for copenhagen"
-"${SCRIPT_DIR}/provision-device.sh" copenhagen 333333333333333 ruptela > /dev/null 2>&1 || true
+info "Provisioning teltonika device 333333333333333 for copenhagen"
+"${SCRIPT_DIR}/provision-device.sh" copenhagen 333333333333333 teltonika > /dev/null 2>&1 || true
 success "Device provisioned."
 
 # -------------------------------------------------------
 section "5. Simulate GPS Data (3 messages each)"
 # -------------------------------------------------------
 
-info "Simulating Ruptela device 111111111111111 (naestved)"
-"${SCRIPT_DIR}/simulate-device.sh" ruptela 111111111111111 3
+info "Simulating teltonika device 111111111111111 (naestved)"
+"${SCRIPT_DIR}/simulate-device.sh" teltonika 111111111111111 3
 success "Sent 3 messages."
 
 info "Simulating Teltonika device 222222222222222 (naestved)"
 "${SCRIPT_DIR}/simulate-device.sh" teltonika 222222222222222 3
 success "Sent 3 messages."
 
-info "Simulating Ruptela device 333333333333333 (copenhagen)"
-"${SCRIPT_DIR}/simulate-device.sh" ruptela 333333333333333 3
+info "Simulating teltonika device 333333333333333 (copenhagen)"
+"${SCRIPT_DIR}/simulate-device.sh" teltonika 333333333333333 3
 success "Sent 3 messages."
 
 # -------------------------------------------------------
@@ -156,13 +154,13 @@ echo -e "${GREEN}Demo completed successfully!${NC}"
 echo ""
 echo "  Municipalities provisioned: naestved, copenhagen"
 echo "  Devices provisioned:"
-echo "    - naestved:   111111111111111 (ruptela), 222222222222222 (teltonika)"
-echo "    - copenhagen: 333333333333333 (ruptela)"
+echo "    - naestved:   111111111111111 (teltonika), 222222222222222 (teltonika)"
+echo "    - copenhagen: 333333333333333 (teltonika)"
 echo "  Messages sent: 9 total (3 per device)"
 echo "  Tenant isolation: verified"
 echo ""
 echo "  Useful commands:"
 echo "    docker compose logs -f bento       # View Bento stream processor logs"
 echo "    docker compose logs -f iot-agent   # View IoT Agent logs"
-echo "    mosquitto_sub -h localhost -t '#' -v  # Monitor all MQTT messages"
+echo "    mosquitto_sub -h localhost -p 8883 --cafile mosq_certs/ca.crt --cert mosq_certs/client.crt --key mosq_certs/client.key -t '#' -v"
 echo ""

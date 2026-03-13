@@ -20,6 +20,6 @@ HOST="${QL_HOST:-localhost}"
 echo "Querying time-series for entity urn:ngsi-ld:GPSTracker:${IMEI} (tenant: ${MUNICIPALITY}, limit: ${LIMIT})"
 echo "---"
 
-curl -sX GET "http://${HOST}:8668/v2/entities/urn:ngsi-ld:GPSTracker:${IMEI}/attrs/latitude?limit=${LIMIT}" \
+curl -sX GET "http://${HOST}:8668/v2/entities/urn:ngsi-ld:GPSTracker:${IMEI}?limit=${LIMIT}" \
   -H "Fiware-Service: ${MUNICIPALITY}" \
   -H 'Fiware-ServicePath: /' | jq .

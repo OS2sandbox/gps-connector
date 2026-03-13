@@ -18,6 +18,6 @@ HOST="${IOT_AGENT_HOST:-localhost}"
 echo "Listing devices for municipality: ${MUNICIPALITY}"
 echo "---"
 
-curl -sX GET "http://${HOST}:4041/iot/devices" \
+curl -sX GET "http://${HOST}:14041/iot/devices" \
   -H "Fiware-Service: ${MUNICIPALITY}" \
   -H 'Fiware-ServicePath: /' | jq .
