@@ -6,7 +6,8 @@ GPS telemetry ingestion system connecting IoT GPS devices (Teltonika) to a FIWAR
 
 ```mermaid
 graph LR
-    A[GPS Device] -->|MQTT TLS 8883| B[RabbitMQ]
+    A[GPS Device] -->|MQTT TLS 8883| N[NGINX]
+    N -->|TCP proxy| B[RabbitMQ]
     B -->|MQTT 1883| C[Bento]
     C -->|Redis lookup| J[(Redis)]
     C -->|MQTT 1883| B
@@ -19,7 +20,7 @@ graph LR
 
 ### Data Flow
 
-1. **GPS devices** publish telemetry to RabbitMQ via MQTT TLS on raw topic `{device_type}/{imei}/data`
+1. **GPS devices** publish telemetry via MQTT TLS to **NGINX** on port 8883, which proxies TCP traffic to **RabbitMQ** on raw topic `{device_type}/{imei}/data`
 2. **Bento** subscribes to raw topics via MQTT, extracts IMEI from topic
 3. **Bento** looks up IMEI in **Redis** to resolve the tenant (municipality). Unknown IMEIs are dropped.
 4. **Bento** normalizes the payload to a common format
@@ -64,7 +65,7 @@ Examples:
 
 **Normalized** (published by Bento to IoT Agent topic):
 ```json
-{"lat":55.6613783,"lon":12.5840983,"spd":46,"alt":77,"dir":192.50,"sat":15,"ts":1769594217}
+{"lat":55.6613783,"lon":12.5840983,"spd":46,"ts":1769594217,"ignition":1,"moving":0}
 ```
 
 ## Prerequisites
@@ -276,7 +277,7 @@ SELECT * FROM "mtnaestved"."etgpstracker" ORDER BY time_index DESC LIMIT 10;
 
 ### Device Authentication
 
-RabbitMQ requires client certificates (mTLS) on port 8883 — devices must present a valid certificate signed by the CA to connect. Device identity is additionally verified by IMEI presence in Redis. Spoofing requires both a valid client certificate AND a known IMEI.
+Devices connect to NGINX on port 8883, which acts as a TCP proxy to RabbitMQ. RabbitMQ terminates TLS and validates client certificates (mTLS) — devices must present a valid certificate signed by the CA to connect. Device identity is additionally verified by IMEI presence in Redis. Spoofing requires both a valid client certificate AND a known IMEI.
 Teltonika devices support mTLS which is why this approach was chosen over username/password authentication.
 
 ### Data Durability
@@ -293,7 +294,7 @@ Redis is on the hot path for every message (tenant resolution + device authoriza
 
 ### Encryption
 
-Device-to-RabbitMQ traffic is encrypted via mTLS on port 8883. Internal service-to-service communication (MQTT on 1883, AMQP on 5672, HTTP between services) remains unencrypted as it runs within the Docker/K8s network.
+Device-to-NGINX-to-RabbitMQ traffic is encrypted via mTLS on port 8883. NGINX passes TLS through without termination. Internal service-to-service communication (MQTT on 1883, AMQP on 5672, HTTP between services) remains unencrypted as it runs within the Docker/K8s network.
 
 ### Rate Limiting
 
