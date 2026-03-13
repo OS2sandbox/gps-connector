@@ -54,9 +54,12 @@ services:
     image: fiware/iotagent-json:latest
     hostname: iot-agent
     depends_on:
-      - mongo
-      - orion
-      - rabbitmq
+      mongo:
+        condition: service_started
+      orion:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "14041:4041"   # North Port (Config API)
       - "7896:7896"   # South Port (Device Data)
@@ -93,24 +96,45 @@ services:
     image: ghcr.io/warpstreamlabs/bento:latest
     hostname: bento
     depends_on:
-      - rabbitmq
-      - iot-agent
-      - redis
+      rabbitmq:
+        condition: service_healthy
+      iot-agent:
+        condition: service_started
+      redis:
+        condition: service_started
     volumes:
       - ./bento/config.yaml:/bento.yaml:ro
     restart: unless-stopped
+
 
   rabbitmq:
     image: rabbitmq:3.13-management
     hostname: rabbitmq
     ports:
-      - "8883:8883"   # MQTT TLS
+      # 8883 fjernet - NGINX håndterer nu ekstern TLS trafik
       - "15673:15672" # Management UI
     volumes:
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
       - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
       - ./mosq_certs:/etc/rabbitmq/certs:ro
       - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:latest
+    hostname: nginx
+    ports:
+      - "8883:8883"   # MQTT TLS - devices rammer her i stedet
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

@@ -31,7 +31,8 @@ services=(
   "QuantumLeap|curl -sf http://localhost:8668/version"
   "CrateDB|curl -sf http://localhost:4200/"
   "MongoDB|curl -sf http://localhost:27017 || docker compose exec -T mongo mongosh --eval \"db.adminCommand('ping')\" 2>/dev/null"
-  "RabbitMQ|curl -sf http://localhost:15673/api/overview -u iot_pipeline:changeme 2>/dev/null || timeout 2 bash -c '</dev/tcp/localhost/8883' 2>/dev/null"
+  "RabbitMQ|curl -sf http://localhost:15673/api/overview -u iot_pipeline:changeme 2>/dev/null"
+  "NGINX|timeout 2 bash -c '</dev/tcp/localhost/8883' 2>/dev/null"
   "Redis|timeout 2 bash -c '</dev/tcp/localhost/6379' 2>/dev/null"
 )
 
