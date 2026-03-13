@@ -1,16 +1,16 @@
 # GPS Connector
 
-GPS telemetry ingestion system connecting IoT GPS devices (Ruptela, Teltonika) to a FIWARE ecosystem with multi-tenant isolation for different municipalities.
+GPS telemetry ingestion system connecting IoT GPS devices (Teltonika) to a FIWARE ecosystem with multi-tenant isolation for different municipalities.
 
 ## Architecture
 
 ```mermaid
 graph LR
-    A[GPS Device] -->|raw MQTT| B[Mosquitto]
-    B -->|subscribe raw| C[Bento]
+    A[GPS Device] -->|MQTT TLS 8883| B[RabbitMQ]
+    B -->|MQTT 1883| C[Bento]
     C -->|Redis lookup| J[(Redis)]
-    C -->|normalized MQTT| B
-    B -->|subscribe normalized| D[IoT Agent JSON]
+    C -->|MQTT 1883| B
+    B -->|AMQP 5672| D[IoT Agent JSON]
     D -->|NGSI-LD| E[Orion-LD]
     E -->|Subscription| F[QuantumLeap]
     F -->|SQL| G[CrateDB]
@@ -19,18 +19,18 @@ graph LR
 
 ### Data Flow
 
-1. **GPS devices** publish telemetry to Mosquitto on raw topic `{device_type}/{imei}/data`
-2. **Bento** subscribes to raw topics, extracts IMEI from topic
+1. **GPS devices** publish telemetry to RabbitMQ via MQTT TLS on raw topic `{device_type}/{imei}/data`
+2. **Bento** subscribes to raw topics via MQTT, extracts IMEI from topic
 3. **Bento** looks up IMEI in **Redis** to resolve the tenant (municipality). Unknown IMEIs are dropped.
-4. **Bento** normalizes the payload by device type (Ruptela/Teltonika → common format)
-5. **Bento** publishes normalized data back to Mosquitto on topic `/{tenant}-{device_type}/{imei}/attrs`
-6. **IoT Agent** subscribes to normalized MQTT topics via its built-in MQTT binding, resolves device and tenant from the topic apikey, forwards to Orion-LD
+4. **Bento** normalizes the payload to a common format
+5. **Bento** publishes normalized data back to RabbitMQ via MQTT on topic `/{tenant}-{device_type}/{imei}/attrs`
+6. **IoT Agent** consumes normalized messages from RabbitMQ via AMQP from the shared `amq.topic` exchange, resolves device and tenant from the routing key, forwards to Orion-LD
 7. **Orion-LD** stores entity data, notifies QuantumLeap via subscription
 8. **QuantumLeap** persists time-series data to CrateDB
 
 ### Multi-Tenancy
 
-Each municipality is a FIWARE tenant (identified by `Fiware-Service` / `NGSILD-Tenant` header). API keys are scoped per tenant and device type (e.g., `naestved-ruptela`, `copenhagen-teltonika`) to ensure unambiguous tenant resolution at the IoT Agent.
+Each municipality is a FIWARE tenant (identified by `Fiware-Service` / `NGSILD-Tenant` header). API keys are scoped per tenant and device type (e.g., `naestved-teltonika`, `copenhagen-teltonika`) to ensure unambiguous tenant resolution at the IoT Agent.
 
 Redis acts as the device registry that Bento uses for:
 - **Tenant resolution** — mapping IMEI to municipality
@@ -38,32 +38,23 @@ Redis acts as the device registry that Bento uses for:
 
 ### MQTT Topic Structure
 
-**Raw topics** (device → Mosquitto):
+**Raw topics** (device → RabbitMQ):
 ```
 {device_type}/{imei}/data
 
 Examples:
-- ruptela/862406075073953/data
 - teltonika/864636060329170/data
 ```
 
-**Normalized topics** (Bento → Mosquitto → IoT Agent):
+**Normalized topics** (Bento → RabbitMQ → IoT Agent):
 ```
 /{tenant}-{device_type}/{imei}/attrs
 
 Examples:
-- /naestved-ruptela/862406075073953/attrs
 - /copenhagen-teltonika/864636060329170/attrs
 ```
 
 ### Device Payload Formats
-
-**Ruptela** (raw from device):
-```json
-{"ts":1769594217,"trigger":8,"prio":0,"imei":"862406075073953","ext":0,
- "pos":{"lat":556613783,"lon":125840983,"alt":77,"dir":19250,"spd":46,"sat":15,"hdop":7},
- "data":{"251":"1","28":"1","173":"1"}}
-```
 
 **Teltonika** (raw from device):
 ```json
@@ -77,12 +68,13 @@ Examples:
 ```
 
 ## Prerequisites
-
+> **Note:** All scripts require a bash environment. On Windows, use WSL (Windows Subsystem for Linux).
 - Docker and Docker Compose
-- `mosquitto-clients` package (for testing): `apt install mosquitto-clients`
+- `mosquitto-clients` package (for MQTT testing against RabbitMQ): `apt install mosquitto-clients`
 - `redis-tools` package (for provisioning): `apt install redis-tools`
 - `jq` for JSON formatting: `apt install jq`
 - `curl` for HTTP requests
+- `openssl` for TLS certificate generation: `apt install openssl`
 
 ## Quick Start
 
@@ -91,7 +83,12 @@ Examples:
 git clone <repo-url>
 cd gps-connector
 
-# Start all services
+# Generate tls certificates
+./scripts/generate-mtls-certs.sh <host> #localhost / Ngrok
+
+# Start all services (Docker Compose v2)
+docker compose up -d
+# or for older Docker versions
 docker-compose up -d
 
 # Wait for services to be ready
@@ -110,17 +107,16 @@ When provisioning a new device (from frontend or script), the following steps ar
 ./scripts/provision-service-group.sh <municipality> <device_type>
 # Creates service group with apikey = {municipality}-{device_type}
 ```
+**2. Ensure QuantumLeap subscription exists** (once per municipality):
+```bash
+./scripts/create-subscription.sh <municipality>
+```
 
-**2. Provision device** (writes to both Redis and IoT Agent):
+**3. Provision device** (writes to both Redis and IoT Agent):
 ```bash
 ./scripts/provision-device.sh <municipality> <imei> <device_type>
 # Step 1: redis SET device:{imei} → {municipality}
 # Step 2: IoT Agent POST /iot/devices with apikey = {municipality}-{device_type}
-```
-
-**3. Ensure QuantumLeap subscription exists** (once per municipality):
-```bash
-./scripts/create-subscription.sh <municipality>
 ```
 
 The device can start sending data immediately after provisioning — no service restarts needed.
@@ -128,17 +124,22 @@ The device can start sending data immediately after provisioning — no service 
 ## Manual Testing
 
 ```bash
+
+# 0. Generate TLS certificates (if not already done)
+./scripts/generate-mtls-certs.sh localhost # Ngrok if using external port
+docker compose restart rabbitmq
+
 # 1. Create service group for a municipality
-./scripts/provision-service-group.sh naestved ruptela
+./scripts/provision-service-group.sh naestved teltonika
 
-# 2. Provision a device (writes Redis + IoT Agent)
-./scripts/provision-device.sh naestved 123456789012345 ruptela
-
-# 3. Create QuantumLeap subscription
+# 2. Create QuantumLeap subscription
 ./scripts/create-subscription.sh naestved
 
+# 3. Provision a device (writes Redis + IoT Agent)
+./scripts/provision-device.sh naestved 123456789012345 teltonika
+
 # 4. Simulate device data
-./scripts/simulate-device.sh ruptela 123456789012345
+./scripts/simulate-device.sh teltonika 123456789012345
 
 # 5. Query the entity in Orion-LD
 ./scripts/query-entity.sh naestved 123456789012345
@@ -151,7 +152,6 @@ The device can start sending data immediately after provisioning — no service 
 
 1. Create service groups for each supported device type:
    ```bash
-   ./scripts/provision-service-group.sh <municipality> ruptela
    ./scripts/provision-service-group.sh <municipality> teltonika
    ```
 
@@ -162,14 +162,13 @@ The device can start sending data immediately after provisioning — no service 
 
 3. Devices can now be provisioned for this municipality.
 
-## Adding a New Device Type
+## Adding a New Device TYPE
 
 1. Define the payload format (document incoming JSON structure)
 
 2. Add MQTT topic subscription in `bento/config.yaml`:
    ```yaml
    topics:
-     - "ruptela/+/data"
      - "teltonika/+/data"
      - "newdevice/+/data"    # Add new topic
    ```
@@ -187,7 +186,7 @@ The device can start sending data immediately after provisioning — no service 
 
 4. Restart Bento:
    ```bash
-   docker-compose restart bento
+   docker-compose restart bento #docker compose if on new docker
    ```
 
 5. Create service groups for existing municipalities:
@@ -195,8 +194,14 @@ The device can start sending data immediately after provisioning — no service 
    ./scripts/provision-service-group.sh naestved newdevice
    ./scripts/provision-service-group.sh copenhagen newdevice
    ```
+   
+6. Add simulation support in `scripts/simulate-device.sh`:
+   - Add a `publish_newdevice()` function with the correct payload format
+   - Add a case in the switch statement for the new device type
 
 ## Monitoring and Debugging
+
+> **Note:** Use `docker compose` or `docker-compose` depending on your Docker version.
 
 **View Bento logs:**
 ```bash
@@ -210,13 +215,16 @@ docker-compose logs -f iot-agent
 
 **Check all MQTT messages (raw + normalized):**
 ```bash
-mosquitto_sub -h localhost -t '#' -v
+mosquitto_sub -h localhost -p 8883 --cafile mosq_certs/ca.crt --cert mosq_certs/client.crt --key mosq_certs/client.key -t '#' -v
 ```
 
 **Check only normalized messages (Bento output):**
 ```bash
-mosquitto_sub -h localhost -t '/+/+/attrs' -v
+mosquitto_sub -h localhost -p 8883 --cafile mosq_certs/ca.crt --cert mosq_certs/client.crt --key mosq_certs/client.key -t '/+/+/attrs' -v
 ```
+
+**RabbitMQ Management UI:**
+Open http://localhost:15673 (login: iot_pipeline / changeme)
 
 **Verify Redis device registry:**
 ```bash
@@ -234,11 +242,13 @@ SELECT * FROM "mtnaestved"."etgpstracker" ORDER BY time_index DESC LIMIT 10;
 
 ## Troubleshooting
 
+> **Note:** Use `docker compose` or `docker-compose` depending on your Docker version.
+
 1. **Device data not appearing in Orion-LD**
    - Check Bento logs for "Unprovisioned device" warnings (IMEI not in Redis)
    - Verify Redis mapping: `redis-cli GET device:{imei}`
    - Verify device is provisioned in IoT Agent: `./scripts/list-devices.sh <municipality>`
-   - Check normalized MQTT topic: `mosquitto_sub -h localhost -t '/+/+/attrs' -v`
+   - Check normalized MQTT topic: `mosquitto_sub -h localhost -p 8883 --cafile mosq_certs/ca.crt --cert mosq_certs/client.crt --key mosq_certs/client.key -t '/+/+/attrs' -v`
 
 2. **Time-series not appearing in QuantumLeap**
    - Verify subscription exists
@@ -260,19 +270,18 @@ SELECT * FROM "mtnaestved"."etgpstracker" ORDER BY time_index DESC LIMIT 10;
 - [FIWARE Orion-LD](https://github.com/FIWARE/context.Orion-LD)
 - [FIWARE QuantumLeap](https://quantumleap.readthedocs.io/)
 - [Bento Documentation](https://warpstreamlabs.github.io/bento/docs/about/)
-- [Mosquitto](https://mosquitto.org/documentation/)
+- [RabbitMQ MQTT Plugin](https://www.rabbitmq.com/docs/mqtt)
 
 ## Known Limitations
 
 ### Device Authentication
 
-Mosquitto allows anonymous connections. There is no client-level authentication (username/password, TLS client certificates) at the MQTT broker. Device identity is verified only by IMEI presence in Redis, which is not a secret — IMEIs are printed on device labels and appear in procurement documents. Spoofing a known IMEI from any network-accessible client is possible.
-
-Teltonika devices do not support MQTT username/password authentication, which limits options for traditional client auth. A Mosquitto dynamic security plugin backed by Redis could reject unknown IMEIs at connection time (before messages enter the broker), but would not prevent spoofing of known IMEIs.
+RabbitMQ requires client certificates (mTLS) on port 8883 — devices must present a valid certificate signed by the CA to connect. Device identity is additionally verified by IMEI presence in Redis. Spoofing requires both a valid client certificate AND a known IMEI.
+Teltonika devices support mTLS which is why this approach was chosen over username/password authentication.
 
 ### Data Durability
 
-If Bento, the IoT Agent, or downstream services (Orion-LD, QuantumLeap) go down, in-flight messages may be lost. Mosquitto is a message router, not a message store. QoS 1 provides at-least-once delivery to connected subscribers, but if Bento is disconnected, messages queue only up to `max_queued_messages` (default 1000) for persistent sessions. There is no dead-letter queue, disk buffer, or replay mechanism.
+RabbitMQ provides durable queues for the IoT Agent AMQP consumer (`iotaqueue`), so normalized messages survive broker restarts. However, if Bento or downstream services (Orion-LD, QuantumLeap) go down, in-flight messages on the MQTT side may still be lost — RabbitMQ's MQTT plugin uses transient queues for QoS 0 subscribers. For production, consider upgrading to QoS 1 on the Bento MQTT input to ensure at-least-once delivery from device to normalization.
 
 ### Service Redundancy
 
@@ -284,7 +293,7 @@ Redis is on the hot path for every message (tenant resolution + device authoriza
 
 ### Encryption
 
-All communication between services (MQTT, HTTP) is unencrypted. Device-to-Mosquitto traffic traverses the public internet without TLS.
+Device-to-RabbitMQ traffic is encrypted via mTLS on port 8883. Internal service-to-service communication (MQTT on 1883, AMQP on 5672, HTTP between services) remains unencrypted as it runs within the Docker/K8s network.
 
 ### Rate Limiting
 

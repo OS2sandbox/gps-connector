@@ -1,16 +1,18 @@
 # Bento configuration for GPS Connector
-# Subscribes to raw MQTT topics, resolves tenant via Redis,
-# normalizes payloads, and republishes to IoT Agent MQTT topics.
+# Subscribes to raw MQTT topics via RabbitMQ, resolves tenant via Redis,
+# normalizes payloads, and republishes to RabbitMQ for IoT Agent consumption.
 
 input:
   mqtt:
     urls:
-      - tcp://mosquitto:1883
+      - tcp://rabbitmq:1883
+    user: "${RABBITMQ_USER:iot_pipeline}"
+    password: "${RABBITMQ_PASS:changeme}"
     client_id: bento-gps-connector
     topics:
-      - "ruptela/+/data"
-      - "teltonika/+/data"
-    qos: 1
+      - "teltonika/123456789012345/data"
+    qos: 0
+    clean_session: false
     auto_replay_nacks: true
 
 pipeline:
@@ -35,13 +37,16 @@ pipeline:
     # Step 3: Resolve tenant from Redis using IMEI
     # Redis key format: device:{imei} → {municipality}
     # Unprovisioned devices (no Redis key) are dropped.
+    - log:
+        level: DEBUG
+        message: 'DEBUG lookup: device_id=${! metadata("device_id") } cache_key=${! metadata("device_id") }'
     - branch:
         request_map: 'root = metadata("device_id")'
         processors:
           - cache:
               operator: get
               resource: device_cache
-              key: '${! content().string()}'
+              key: 'device:${! content().string()}'
         result_map: 'meta tenant = content().string()'
     - switch:
         - check: 'metadata("tenant") == "" || metadata("tenant") == "null"'
@@ -53,22 +58,6 @@ pipeline:
 
     # Step 4: Route to device-specific normalization
     - switch:
-        # Ruptela devices
-        # Input:  {"ts":1769594217,"trigger":8,"prio":0,"imei":"862406075073953","ext":0,
-        #          "pos":{"lat":556613783,"lon":125840983,"alt":77,"dir":19250,"spd":46,"sat":15,"hdop":7},
-        #          "data":{"251":"1","28":"1",...}}
-        # lat/lon are degrees × 10^7 (integer), dir is degrees × 100
-        - check: 'metadata("device_type") == "ruptela"'
-          processors:
-            - mapping: |
-                root.lat = this.pos.lat / 10000000.0
-                root.lon = this.pos.lon / 10000000.0
-                root.spd = this.pos.spd
-                root.alt = this.pos.alt
-                root.dir = this.pos.dir / 100.0
-                root.sat = this.pos.sat
-                root.ts = this.ts
-
         # Teltonika devices
         # Input:  {"state":{"reported":{"ts":1769610760000,"pr":0,"latlng":"55.123456,12.654321",
         #          "alt":0,"ang":0,"sat":0,"sp":0,"evt":240,...}}}
@@ -80,11 +69,10 @@ pipeline:
                 let coords = $r.latlng.split(",")
                 root.lat = $coords.index(0).number()
                 root.lon = $coords.index(1).number()
-                root.spd = $r.sp
-                root.alt = $r.alt
-                root.dir = $r.ang
-                root.sat = $r.sat
+                root.spd = $r.sp             
                 root.ts = $r.ts / 1000
+                root.ignition = $r.get("239")
+                root.moving = $r.get("240") 
 
         # Unknown device type - log and drop
         - processors:
@@ -103,21 +91,22 @@ pipeline:
 output:
   mqtt:
     urls:
-      - tcp://mosquitto:1883
+      - tcp://rabbitmq:1883
+    user: "${RABBITMQ_USER:iot_pipeline}"
+    password: "${RABBITMQ_PASS:changeme}"
     client_id: bento-gps-publisher
     topic: '/${! metadata("tenant") }-${! metadata("device_type") }/${! metadata("device_id") }/attrs'
-    qos: 1
+    qos: 0
 
 cache_resources:
   - label: device_cache
     redis:
       url: redis://redis:6379
-      prefix: "device:"
       default_ttl: 0s
 
 # Observability
 logger:
-  level: INFO
+  level: DEBUG
   format: json
 
 metrics:

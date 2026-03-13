@@ -50,26 +50,15 @@ services:
       - REDIS_HOST=redis
       - QL_DEFAULT_DB=crate
 
-  mosquitto:
-    image: eclipse-mosquitto:2
-    hostname: mosquitto
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquittodata:/mosquitto/data
-    restart: unless-stopped
-
   iot-agent:
     image: fiware/iotagent-json:latest
     hostname: iot-agent
     depends_on:
       - mongo
       - orion
-      - mosquitto
+      - rabbitmq
     ports:
-      - "4041:4041"   # North Port (Config API)
+      - "14041:4041"   # North Port (Config API)
       - "7896:7896"   # South Port (Device Data)
     environment:
       - IOTA_CB_HOST=orion
@@ -86,25 +75,46 @@ services:
       - IOTA_CB_NGSI_VERSION=ld
       - IOTA_JSON_LD_CONTEXT=https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld
       - IOTA_FALLBACK_TENANT=default
-      - IOTA_MULTI_CORE=true
-      - IOTA_MQTT_HOST=mosquitto
-      - IOTA_MQTT_PORT=1883
-      - IOTA_AMQP_DISABLED=true
+      - IOTA_MULTI_CORE=false
+      # Use AMQP (not MQTT) for IoT Agent → RabbitMQ.
+      # RabbitMQ does not support MQTT $share/ subscriptions,
+      # which iotagent-json:latest hardcodes. AMQP consumes from
+      # the same amq.topic exchange that the MQTT plugin publishes to.
+      - IOTA_MQTT_DISABLED=true
+      - IOTA_AMQP_HOST=rabbitmq
+      - IOTA_AMQP_PORT=5672
+      - IOTA_AMQP_USERNAME=iot_pipeline
+      - IOTA_AMQP_PASSWORD=changeme
+      - IOTA_AMQP_EXCHANGE=amq.topic
+      - IOTA_AMQP_DURABLE=true
     restart: unless-stopped
 
   bento:
     image: ghcr.io/warpstreamlabs/bento:latest
     hostname: bento
     depends_on:
-      - mosquitto
+      - rabbitmq
       - iot-agent
       - redis
     volumes:
       - ./bento/config.yaml:/bento.yaml:ro
     restart: unless-stopped
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    hostname: rabbitmq
+    ports:
+      - "8883:8883"   # MQTT TLS
+      - "15673:15672" # Management UI
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./mosq_certs:/etc/rabbitmq/certs:ro
+      - rabbitmqdata:/var/lib/rabbitmq
+    restart: unless-stopped
+
 volumes:
   mongodata:
   cratedata:
   redisdata:
-  mosquittodata:
+  rabbitmqdata:

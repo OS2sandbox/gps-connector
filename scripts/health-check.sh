@@ -27,11 +27,11 @@ TOTAL=0
 
 services=(
   "Orion-LD|curl -sf http://localhost:1026/version"
-  "IoT Agent|curl -sf http://localhost:4041/iot/about"
+  "IoT Agent|curl -sf http://localhost:14041/iot/about"
   "QuantumLeap|curl -sf http://localhost:8668/version"
   "CrateDB|curl -sf http://localhost:4200/"
   "MongoDB|curl -sf http://localhost:27017 || docker compose exec -T mongo mongosh --eval \"db.adminCommand('ping')\" 2>/dev/null"
-  "Mosquitto|timeout 2 bash -c '</dev/tcp/localhost/1883' 2>/dev/null"
+  "RabbitMQ|curl -sf http://localhost:15673/api/overview -u iot_pipeline:changeme 2>/dev/null || timeout 2 bash -c '</dev/tcp/localhost/8883' 2>/dev/null"
   "Redis|timeout 2 bash -c '</dev/tcp/localhost/6379' 2>/dev/null"
 )
 

@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: $0 <municipality> <device_type>"
-  echo "Example: $0 naestved ruptela"
+  echo "Example: $0 naestved teltonika"
   exit 1
 }
 
@@ -20,7 +20,7 @@ APIKEY="${MUNICIPALITY}-${DEVICE_TYPE}"
 
 echo "Creating service group: municipality=${MUNICIPALITY}, device_type=${DEVICE_TYPE}, apikey=${APIKEY}"
 
-curl -iX POST "http://${HOST}:4041/iot/services" \
+curl -iX POST "http://${HOST}:14041/iot/services" \
   -H 'Content-Type: application/json' \
   -H "Fiware-Service: ${MUNICIPALITY}" \
   -H 'Fiware-ServicePath: /' \

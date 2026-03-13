@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: $0 <municipality> <imei> <device_type>"
-  echo "Example: $0 naestved 123456789012345 ruptela"
+  echo "Example: $0 naestved 123456789012345 teltonika"
   exit 1
 }
 
@@ -28,7 +28,7 @@ echo "  Redis key device:${IMEI} = ${MUNICIPALITY}"
 
 # Step 2: Provision device in IoT Agent
 echo "  Provisioning in IoT Agent..."
-curl -iX POST "http://${HOST}:4041/iot/devices" \
+curl -iX POST "http://${HOST}:14041/iot/devices" \
   -H 'Content-Type: application/json' \
   -H "Fiware-Service: ${MUNICIPALITY}" \
   -H 'Fiware-ServicePath: /' \
@@ -43,10 +43,9 @@ curl -iX POST "http://${HOST}:4041/iot/devices" \
         { "object_id": "lat", "name": "latitude", "type": "Number" },
         { "object_id": "lon", "name": "longitude", "type": "Number" },
         { "object_id": "spd", "name": "speed", "type": "Number" },
-        { "object_id": "alt", "name": "altitude", "type": "Number" },
-        { "object_id": "dir", "name": "direction", "type": "Number" },
-        { "object_id": "sat", "name": "satellites", "type": "Integer" },
-        { "object_id": "ts", "name": "deviceTimestamp", "type": "Integer" }
+        { "object_id": "ts", "name": "deviceTimestamp", "type": "Integer" },
+        { "object_id": "ignition", "name": "ignition", "type": "Integer" },
+        { "object_id": "moving", "name": "moving", "type": "Integer" }
       ],
       "static_attributes": [
         { "name": "deviceType", "type": "Text", "value": "'"${DEVICE_TYPE}"'" }

@@ -27,12 +27,12 @@ curl -iX POST "http://${HOST}:1026/ngsi-ld/v1/subscriptions" \
       { "type": "GPSTracker" }
     ],
     "watchedAttributes": [
-      "latitude", "longitude", "speed", "altitude", "direction", "satellites", "deviceTimestamp"
+      "latitude", "longitude", "speed", "deviceTimestamp", "ignition", "moving"
     ],
     "notification": {
       "format": "normalized",
       "attributes": [
-        "latitude", "longitude", "speed", "altitude", "direction", "satellites", "deviceTimestamp"
+        "latitude", "longitude", "speed", "deviceTimestamp", "ignition", "moving"
       ],
       "endpoint": {
         "uri": "http://quantumleap:8668/v2/notify",
