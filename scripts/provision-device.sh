@@ -38,7 +38,7 @@ curl -iX POST "http://${HOST}:14041/iot/devices" \
       "entity_name": "urn:ngsi-ld:GPSTracker:'"${IMEI}"'",
       "entity_type": "GPSTracker",
       "apikey": "'"${APIKEY}"'",
-      "transport": "MQTT",
+      "transport": "AMQP",
       "attributes": [
         { "object_id": "lat", "name": "latitude", "type": "Number" },
         { "object_id": "lon", "name": "longitude", "type": "Number" },

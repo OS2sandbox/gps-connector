@@ -8,9 +8,9 @@ GPS telemetry ingestion system connecting IoT GPS devices (Teltonika) to a FIWAR
 graph LR
     A[GPS Device] -->|MQTT TLS 8883| N[NGINX]
     N -->|TCP proxy| B[RabbitMQ]
-    B -->|MQTT 1883| C[Bento]
+    B -->|AMQP 5672| C[Bento]
     C -->|Redis lookup| J[(Redis)]
-    C -->|MQTT 1883| B
+    C -->|AMQP 5672| B
     B -->|AMQP 5672| D[IoT Agent JSON]
     D -->|NGSI-LD| E[Orion-LD]
     E -->|Subscription| F[QuantumLeap]
@@ -21,10 +21,10 @@ graph LR
 ### Data Flow
 
 1. **GPS devices** publish telemetry via MQTT TLS to **NGINX** on port 8883, which proxies TCP traffic to **RabbitMQ** on raw topic `{device_type}/{imei}/data`
-2. **Bento** subscribes to raw topics via MQTT, extracts IMEI from topic
+2. **Bento** consumes raw messages from RabbitMQ via AMQP (queue `bento-gps-raw` bound to `amq.topic` with routing key `teltonika.*.data`), extracts IMEI from routing key
 3. **Bento** looks up IMEI in **Redis** to resolve the tenant (municipality). Unknown IMEIs are dropped.
 4. **Bento** normalizes the payload to a common format
-5. **Bento** publishes normalized data back to RabbitMQ via MQTT on topic `/{tenant}-{device_type}/{imei}/attrs`
+5. **Bento** publishes normalized data back to RabbitMQ via AMQP on routing key `.{tenant}-{device_type}.{imei}.attrs`
 6. **IoT Agent** consumes normalized messages from RabbitMQ via AMQP from the shared `amq.topic` exchange, resolves device and tenant from the routing key, forwards to Orion-LD
 7. **Orion-LD** stores entity data, notifies QuantumLeap via subscription
 8. **QuantumLeap** persists time-series data to CrateDB
@@ -37,22 +37,23 @@ Redis acts as the device registry that Bento uses for:
 - **Tenant resolution** — mapping IMEI to municipality
 - **Device authorization** — only provisioned IMEIs (present in Redis) are processed; all others are dropped
 
-### MQTT Topic Structure
+### Topic / Routing Key Structure
 
-**Raw topics** (device → RabbitMQ):
+**Raw** (device → RabbitMQ via MQTT, converted to AMQP routing key):
 ```
-{device_type}/{imei}/data
+MQTT topic:        {device_type}/{imei}/data
+AMQP routing key:  {device_type}.{imei}.data
 
 Examples:
-- teltonika/864636060329170/data
+- teltonika/864636060329170/data  →  teltonika.864636060329170.data
 ```
 
-**Normalized topics** (Bento → RabbitMQ → IoT Agent):
+**Normalized** (Bento → RabbitMQ → IoT Agent, all AMQP):
 ```
-/{tenant}-{device_type}/{imei}/attrs
+AMQP routing key:  .{tenant}-{device_type}.{imei}.attrs
 
 Examples:
-- /copenhagen-teltonika/864636060329170/attrs
+- .copenhagen-teltonika.864636060329170.attrs
 ```
 
 ### Device Payload Formats
@@ -167,11 +168,13 @@ docker compose restart rabbitmq
 
 1. Define the payload format (document incoming JSON structure)
 
-2. Add MQTT topic subscription in `bento/config.yaml`:
+2. Add AMQP binding in `bento/config.yaml`:
    ```yaml
-   topics:
-     - "teltonika/+/data"
-     - "newdevice/+/data"    # Add new topic
+   bindings_declare:
+     - exchange: amq.topic
+       key: "teltonika.*.data"
+     - exchange: amq.topic
+       key: "newdevice.*.data"    # Add new binding
    ```
 
 3. Add normalization mapping in `bento/config.yaml`:
@@ -214,14 +217,15 @@ docker-compose logs -f bento
 docker-compose logs -f iot-agent
 ```
 
-**Check all MQTT messages (raw + normalized):**
+**Check raw MQTT messages (device ingress):**
 ```bash
 mosquitto_sub -h localhost -p 8883 --cafile mosq_certs/ca.crt --cert mosq_certs/client.crt --key mosq_certs/client.key -t '#' -v
 ```
 
-**Check only normalized messages (Bento output):**
+**Check RabbitMQ queues and bindings (normalized messages flow via AMQP internally):**
 ```bash
-mosquitto_sub -h localhost -p 8883 --cafile mosq_certs/ca.crt --cert mosq_certs/client.crt --key mosq_certs/client.key -t '/+/+/attrs' -v
+docker compose exec rabbitmq rabbitmqctl list_queues name messages consumers
+docker compose exec rabbitmq rabbitmqctl list_bindings source_name destination_name routing_key
 ```
 
 **RabbitMQ Management UI:**
@@ -249,7 +253,7 @@ SELECT * FROM "mtnaestved"."etgpstracker" ORDER BY time_index DESC LIMIT 10;
    - Check Bento logs for "Unprovisioned device" warnings (IMEI not in Redis)
    - Verify Redis mapping: `redis-cli GET device:{imei}`
    - Verify device is provisioned in IoT Agent: `./scripts/list-devices.sh <municipality>`
-   - Check normalized MQTT topic: `mosquitto_sub -h localhost -p 8883 --cafile mosq_certs/ca.crt --cert mosq_certs/client.crt --key mosq_certs/client.key -t '/+/+/attrs' -v`
+   - Check RabbitMQ queues: `docker compose exec rabbitmq rabbitmqctl list_queues name messages consumers`
 
 2. **Time-series not appearing in QuantumLeap**
    - Verify subscription exists
@@ -282,7 +286,7 @@ Teltonika devices support mTLS which is why this approach was chosen over userna
 
 ### Data Durability
 
-RabbitMQ provides durable queues for the IoT Agent AMQP consumer (`iotaqueue`), so normalized messages survive broker restarts. However, if Bento or downstream services (Orion-LD, QuantumLeap) go down, in-flight messages on the MQTT side may still be lost — RabbitMQ's MQTT plugin uses transient queues for QoS 0 subscribers. For production, consider upgrading to QoS 1 on the Bento MQTT input to ensure at-least-once delivery from device to normalization.
+RabbitMQ provides durable queues for both the Bento consumer (`bento-gps-raw`) and the IoT Agent AMQP consumer (`iotaqueue`), so messages survive broker restarts. The MQTT plugin still uses transient queues for device ingress (QoS 0), so messages from device to RabbitMQ can be lost during broker restarts.
 
 ### Service Redundancy
 
@@ -294,7 +298,7 @@ Redis is on the hot path for every message (tenant resolution + device authoriza
 
 ### Encryption
 
-Device-to-NGINX-to-RabbitMQ traffic is encrypted via mTLS on port 8883. NGINX passes TLS through without termination. Internal service-to-service communication (MQTT on 1883, AMQP on 5672, HTTP between services) remains unencrypted as it runs within the Docker/K8s network.
+Device-to-NGINX-to-RabbitMQ traffic is encrypted via mTLS on port 8883. NGINX passes TLS through without termination. Internal service-to-service communication (AMQP on 5672, HTTP between services) remains unencrypted as it runs within the Docker/K8s network.
 
 ### Rate Limiting
 

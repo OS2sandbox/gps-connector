@@ -1,26 +1,28 @@
 # Bento configuration for GPS Connector
-# Subscribes to raw MQTT topics via RabbitMQ, resolves tenant via Redis,
-# normalizes payloads, and republishes to RabbitMQ for IoT Agent consumption.
+# Subscribes to raw device data via AMQP from RabbitMQ, resolves tenant via Redis,
+# normalizes payloads, and republishes via AMQP for IoT Agent consumption.
 
 input:
-  mqtt:
+  amqp_0_9:
     urls:
-      - tcp://rabbitmq:1883
-    user: "${RABBITMQ_USER:iot_pipeline}"
-    password: "${RABBITMQ_PASS:changeme}"
-    client_id: bento-gps-connector
-    topics:
-      - "teltonika/+/data"
-    qos: 0
-    clean_session: false
-    auto_replay_nacks: true
+      - amqp://${RABBITMQ_USER:iot_pipeline}:${RABBITMQ_PASS:changeme}@rabbitmq:5672/
+    queue: bento-gps-raw
+    queue_declare:
+      enabled: true
+      durable: true
+    bindings_declare:
+      - exchange: amq.topic
+        key: "teltonika.*.data"
+    consumer_tag: bento-gps-connector
+    prefetch_count: 64
+    auto_ack: false
 
 pipeline:
   processors:
-    # Step 1: Extract device type and IMEI from MQTT topic
-    # Topic format: {device_type}/{imei}/data
+    # Step 1: Extract device type and IMEI from AMQP routing key
+    # Routing key format: {device_type}.{imei}.data
     - mapping: |
-        let topic_parts = metadata("mqtt_topic").split("/")
+        let topic_parts = metadata("amqp_routing_key").split(".")
         meta device_type = $topic_parts.index(0)
         meta device_id = $topic_parts.index(1)
         root = this
@@ -89,14 +91,15 @@ pipeline:
         - mapping: 'root = deleted()'
 
 output:
-  mqtt:
+  amqp_0_9:
     urls:
-      - tcp://rabbitmq:1883
-    user: "${RABBITMQ_USER:iot_pipeline}"
-    password: "${RABBITMQ_PASS:changeme}"
-    client_id: bento-gps-publisher
-    topic: '/${! metadata("tenant") }-${! metadata("device_type") }/${! metadata("device_id") }/attrs'
-    qos: 0
+      - amqp://${RABBITMQ_USER:iot_pipeline}:${RABBITMQ_PASS:changeme}@rabbitmq:5672/
+    exchange: amq.topic
+    key: '.${! metadata("tenant") }-${! metadata("device_type") }.${! metadata("device_id") }.attrs'
+    exchange_declare:
+      enabled: false
+    immediate: false
+    mandatory: false
 
 cache_resources:
   - label: device_cache
