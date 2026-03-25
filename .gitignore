@@ -3,3 +3,5 @@ configurator/
 .claude/
 mosq_certs/*
 !mosq_certs/.gitkeep
+
+k8s/secret.yaml

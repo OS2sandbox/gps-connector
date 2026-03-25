@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iot-agent
+  template:
+    metadata:
+      labels:
+        app: iot-agent
+    spec:
+      initContainers:
+        - name: wait-for-rabbitmq
+          image: busybox
+          command: ['sh', '-c', 'until nc -z rabbitmq 5672; do echo "Waiting for RabbitMQ..."; sleep 2; done']
+      containers:
+        - name: iot-agent
+          image: fiware/iotagent-json:latest
+          ports:
+            - containerPort: 4041
+            - containerPort: 7896
+          env:
+            - name: IOTA_CB_HOST
+              value: orion-ld
+            - name: IOTA_CB_PORT
+              value: "1026"
+            - name: IOTA_NORTH_PORT
+              value: "4041"
+            - name: IOTA_HTTP_PORT
+              value: "7896"
+            - name: IOTA_REGISTRY_TYPE
+              value: mongodb
+            - name: IOTA_MONGO_HOST
+              value: mongodb
+            - name: IOTA_MONGO_PORT
+              value: "27017"
+            - name: IOTA_MONGO_DB
+              value: iotagent-json
+            - name: IOTA_PROVIDER_URL
+              value: http://iot-agent:4041
+            - name: IOTA_DEFAULT_RESOURCE
+              value: /iot/json
+            - name: IOTA_LOG_LEVEL
+              value: DEBUG
+            - name: IOTA_CB_NGSI_VERSION
+              value: ld
+            - name: IOTA_JSON_LD_CONTEXT
+              value: https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld
+            - name: IOTA_FALLBACK_TENANT
+              value: default
+            - name: IOTA_MULTI_CORE
+              value: "false"
+            - name: IOTA_MQTT_DISABLED
+              value: "true"
+            - name: IOTA_AMQP_HOST
+              value: rabbitmq
+            - name: IOTA_AMQP_PORT
+              value: "5672"
+            - name: IOTA_AMQP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: IOTA_AMQP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: IOTA_AMQP_EXCHANGE
+              value: amq.topic
+            - name: IOTA_AMQP_DURABLE
+              value: "true"
