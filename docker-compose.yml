@@ -5,16 +5,27 @@ services:
       - "27017:27017"
     volumes:
       - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   orion:
     image: fiware/orion-ld:latest
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     ports:
       - "1026:1026"
     environment:
       ORIONLD_MULTI_SERVICE: "TRUE"
     command: ["-logLevel", "INFO", "-dbhost", "mongo"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:1026/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   crate:
     image: crate:${CRATE_VERSION:-4.6.7}
@@ -29,6 +40,11 @@ services:
       - "4300:4300"
     volumes:
       - cratedata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4200/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:6.2
@@ -36,6 +52,11 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   quantumleap:
     image: orchestracities/quantumleap:${QL_VERSION:-latest}
@@ -43,8 +64,10 @@ services:
     ports:
       - "8668:8668"
     depends_on:
-      - crate
-      - redis
+      crate:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       - CRATE_HOST=crate
       - REDIS_HOST=redis
@@ -55,9 +78,9 @@ services:
     hostname: iot-agent
     depends_on:
       mongo:
-        condition: service_started
+        condition: service_healthy
       orion:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     ports:
@@ -90,6 +113,11 @@ services:
       - IOTA_AMQP_PASSWORD=changeme
       - IOTA_AMQP_EXCHANGE=amq.topic
       - IOTA_AMQP_DURABLE=true
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:4041/iot/about', r => r.statusCode === 200 ? process.exit(0) : process.exit(1)).on('error', () => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   bento:
@@ -99,9 +127,9 @@ services:
       rabbitmq:
         condition: service_healthy
       iot-agent:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./bento/config.yaml:/bento.yaml:ro
     restart: unless-stopped
@@ -111,7 +139,7 @@ services:
     image: rabbitmq:3.13-management
     hostname: rabbitmq
     ports:
-      # 8883 fjernet - NGINX håndterer nu ekstern TLS trafik
+      # 8883 fjernet - Traefik håndterer ekstern TLS trafik
       - "15673:15672" # Management UI
     volumes:
       - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
@@ -125,13 +153,16 @@ services:
       retries: 5
     restart: unless-stopped
 
-  nginx:
-    image: nginx:latest
-    hostname: nginx
+  traefik:
+    image: traefik:v3.3
+    hostname: traefik
     ports:
-      - "8883:8883"   # MQTT TLS - devices rammer her i stedet
+      - "8883:8883"   # MQTT TLS - device ingress
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./traefik/dynamic.yaml:/etc/traefik/dynamic.yaml:ro
+    command:
+      - --entrypoints.mqtt-tls.address=:8883
+      - --providers.file.filename=/etc/traefik/dynamic.yaml
     depends_on:
       rabbitmq:
         condition: service_healthy

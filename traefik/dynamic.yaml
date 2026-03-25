@@ -1,0 +1,14 @@
+tcp:
+  routers:
+    mqtt-tls:
+      entryPoints:
+        - mqtt-tls
+      rule: "HostSNI(`*`)"
+      service: rabbitmq
+      tls:
+        passthrough: true
+  services:
+    rabbitmq:
+      loadBalancer:
+        servers:
+          - address: "rabbitmq:8883"
