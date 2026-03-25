@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      containers:
+        - name: traefik
+          image: traefik:v3.3
+          args:
+            - --entrypoints.mqtt-tls.address=:8883
+            - --providers.file.filename=/etc/traefik/dynamic.yaml
+          ports:
+            - containerPort: 8883
+          volumeMounts:
+            - name: traefik-config
+              mountPath: /etc/traefik/dynamic.yaml
+              subPath: dynamic.yaml
+      volumes:
+        - name: traefik-config
+          configMap:
+            name: traefik

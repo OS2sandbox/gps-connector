@@ -6,7 +6,7 @@ GPS telemetry ingestion system connecting IoT GPS devices (Teltonika) to a FIWAR
 
 ```mermaid
 graph LR
-    A[GPS Device] -->|MQTT TLS 8883| N[NGINX]
+    A[GPS Device] -->|MQTT TLS 8883| N[Traefik]
     N -->|TCP proxy| B[RabbitMQ]
     B -->|AMQP 5672| C[Bento]
     C -->|Redis lookup| J[(Redis)]
@@ -20,7 +20,7 @@ graph LR
 
 ### Data Flow
 
-1. **GPS devices** publish telemetry via MQTT TLS to **NGINX** on port 8883, which proxies TCP traffic to **RabbitMQ** on raw topic `{device_type}/{imei}/data`
+1. **GPS devices** publish telemetry via MQTT TLS to **Traefik** on port 8883, which proxies TCP traffic to **RabbitMQ** on raw topic `{device_type}/{imei}/data`
 2. **Bento** consumes raw messages from RabbitMQ via AMQP (queue `bento-gps-raw` bound to `amq.topic` with routing key `teltonika.*.data`), extracts IMEI from routing key
 3. **Bento** looks up IMEI in **Redis** to resolve the tenant (municipality). Unknown IMEIs are dropped.
 4. **Bento** normalizes the payload to a common format
@@ -69,22 +69,22 @@ Examples:
 {"lat":55.6613783,"lon":12.5840983,"spd":46,"ts":1769594217,"ignition":1,"moving":0}
 ```
 
+## Setup
+
+The stack can be run either with **Docker Compose** or in a local **Kubernetes** cluster using **k3d**. Both approaches use the same scripts for provisioning and testing.
+
 ## Prerequisites
 > **Note:** All scripts require a bash environment. On Windows, use WSL (Windows Subsystem for Linux).
-- Docker and Docker Compose
+- Docker and Docker Compose (or k3d for Kubernetes)
 - `mosquitto-clients` package (for MQTT testing against RabbitMQ): `apt install mosquitto-clients`
 - `redis-tools` package (for provisioning): `apt install redis-tools`
 - `jq` for JSON formatting: `apt install jq`
 - `curl` for HTTP requests
 - `openssl` for TLS certificate generation: `apt install openssl`
 
-## Quick Start
+## Quick Start (Docker Compose)
 
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd gps-connector
-
 # Generate tls certificates
 ./scripts/generate-mtls-certs.sh <host> #localhost / Ngrok
 
@@ -98,6 +98,40 @@ docker-compose up -d
 
 # Run the demo
 ./scripts/demo.sh
+```
+
+## Local Testing with Kubernetes (k3d)
+
+For testing the stack in a local Kubernetes cluster using [k3d](https://k3d.io/). This uses port-forwarding to expose services on localhost, which is only intended for local testing — not production.
+
+**Additional prerequisites:**
+- [k3d](https://k3d.io/)
+- `kubectl`
+
+```bash
+# Generate TLS certificates
+./scripts/generate-mtls-certs.sh localhost
+
+# Create cluster and deploy all services
+./scripts/k8s-setup.sh
+
+# Start port-forwarding (runs in background)
+./scripts/k8s-port-forward.sh
+
+# Verify pods are running
+kubectl get pods
+
+# Follow the Manual Testing section below to test the stack
+```
+
+To stop port-forwarding:
+```bash
+pkill -f 'kubectl port-forward'
+```
+
+To tear down the cluster:
+```bash
+k3d cluster delete gps-connector-local
 ```
 
 ## Device Registration Flow

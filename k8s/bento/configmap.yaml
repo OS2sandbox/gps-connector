@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bento-config
+data:
+  bento.yaml: |
+    # Bento configuration for GPS Connector
+    # Subscribes to raw device data via AMQP from RabbitMQ, resolves tenant via Redis,
+    # normalizes payloads, and republishes via AMQP for IoT Agent consumption.
+
+    input:
+      amqp_0_9:
+        urls:
+          - amqp://${RABBITMQ_USER:iot_pipeline}:${RABBITMQ_PASS:changeme}@rabbitmq:5672/
+        queue: bento-gps-raw
+        queue_declare:
+          enabled: true
+          durable: true
+        bindings_declare:
+          - exchange: amq.topic
+            key: "teltonika.*.data"
+        consumer_tag: bento-gps-connector
+        prefetch_count: 64
+        auto_ack: false
+
+    pipeline:
+      processors:
+        # Step 1: Extract device type and IMEI from AMQP routing key
+        # Routing key format: {device_type}.{imei}.data
+        - mapping: |
+            let topic_parts = metadata("amqp_routing_key").split(".")
+            meta device_type = $topic_parts.index(0)
+            meta device_id = $topic_parts.index(1)
+            root = this
+
+        # Step 2: Validate we have required metadata
+        - switch:
+            - check: 'metadata("device_type") == "" || metadata("device_id") == ""'
+              processors:
+                - log:
+                    level: ERROR
+                    message: "Invalid topic structure: ${! metadata(\"mqtt_topic\") }"
+                - mapping: 'root = deleted()'
+
+        # Step 3: Resolve tenant from Redis using IMEI
+        # Redis key format: device:{imei} → {municipality}
+        # Unprovisioned devices (no Redis key) are dropped.
+        - log:
+            level: DEBUG
+            message: 'DEBUG lookup: device_id=${! metadata("device_id") } cache_key=${! metadata("device_id") }'
+        - branch:
+            request_map: 'root = metadata("device_id")'
+            processors:
+              - cache:
+                  operator: get
+                  resource: device_cache
+                  key: 'device:${! content().string()}'
+            result_map: 'meta tenant = content().string()'
+        - switch:
+            - check: 'metadata("tenant") == "" || metadata("tenant") == "null"'
+              processors:
+                - log:
+                    level: WARN
+                    message: "Unprovisioned device (IMEI not in Redis): ${! metadata(\"device_id\") }"
+                - mapping: 'root = deleted()'
+
+        # Step 4: Route to device-specific normalization
+        - switch:
+            # Teltonika devices
+            # Input:  {"state":{"reported":{"ts":1769610760000,"pr":0,"latlng":"55.123456,12.654321",
+            #          "alt":0,"ang":0,"sat":0,"sp":0,"evt":240,...}}}
+            # ts is milliseconds, latlng is a comma-separated string "lat,lng"
+            - check: 'metadata("device_type") == "teltonika"'
+              processors:
+                - mapping: |
+                    let r = this.state.reported
+                    let coords = $r.latlng.split(",")
+                    root.lat = $coords.index(0).number()
+                    root.lon = $coords.index(1).number()
+                    root.spd = $r.sp             
+                    root.ts = $r.ts / 1000
+                    root.ignition = $r.get("239")
+                    root.moving = $r.get("240") 
+
+            # Unknown device type - log and drop
+            - processors:
+                - log:
+                    level: WARN
+                    message: "Unknown device type: ${! metadata(\"device_type\") }"
+                - mapping: 'root = deleted()'
+
+        # Step 5: Final validation - ensure we have required fields
+        - catch:
+            - log:
+                level: ERROR
+                message: "Payload normalization failed: ${! error() }"
+            - mapping: 'root = deleted()'
+
+    output:
+      amqp_0_9:
+        urls:
+          - amqp://${RABBITMQ_USER:iot_pipeline}:${RABBITMQ_PASS:changeme}@rabbitmq:5672/
+        exchange: amq.topic
+        key: '.${! metadata("tenant") }-${! metadata("device_type") }.${! metadata("device_id") }.attrs'
+        exchange_declare:
+          enabled: false
+        immediate: false
+        mandatory: false
+
+    cache_resources:
+      - label: device_cache
+        redis:
+          url: redis://redis:6379
+          default_ttl: 0s
+
+    # Observability
+    logger:
+      level: DEBUG
+      format: json
+
+    metrics:
+      prometheus: {}
