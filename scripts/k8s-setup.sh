@@ -15,7 +15,7 @@ kubectl wait --for=condition=Ready node --all --timeout=60s
 
 echo "=== Deploying stack ==="
 kubectl apply -f k8s/secret.yaml
-kubectl apply -f k8s/bento/ -f k8s/cratedb/ -f k8s/iot-agent/ -f k8s/mongodb/ -f k8s/orion-ld/ -f k8s/quantumleap/ -f k8s/rabbitmq/ -f k8s/redis/ -f k8s/traefik/
+kubectl apply -f k8s/bento/ -f k8s/cratedb/ -f k8s/iot-agent/ -f k8s/mongodb/ -f k8s/orion-ld/ -f k8s/quantumleap/ -f k8s/rabbitmq/ -f k8s/redis/ -f k8s/traefik/ -f k8s/loki/ -f k8s/alloy/ -f k8s/grafana/
 
 echo "=== Waiting for pods ==="
 kubectl get pods -w &

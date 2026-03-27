@@ -239,6 +239,18 @@ docker compose restart rabbitmq
 
 ## Monitoring and Debugging
 
+### Logs (Kubernetes)
+
+Logs from all pods are collected by Grafana Alloy and stored in Loki. Open Grafana at `http://localhost:3000`, go to **Explore**, select the **Loki** datasource and run a LogQL query:
+
+```logql
+{pod=~".+"}              # all pods
+{pod=~"bento.*"}         # filter by pod name
+{pod=~"iot-agent.*"}     # IoT Agent logs
+```
+
+### Docker Compose
+
 > **Note:** Use `docker compose` or `docker-compose` depending on your Docker version.
 
 **View Bento logs:**
