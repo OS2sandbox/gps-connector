@@ -16,6 +16,8 @@ graph LR
     E -->|Subscription| F[QuantumLeap]
     F -->|SQL| G[CrateDB]
     D --- H[(MongoDB)]
+    G -->|CronJob| I[Archiver]
+    I -->|Parquet| K[(MinIO)]
 ```
 
 ### Data Flow
@@ -28,6 +30,7 @@ graph LR
 6. **IoT Agent** consumes normalized messages from RabbitMQ via AMQP from the shared `amq.topic` exchange, resolves device and tenant from the routing key, forwards to Orion-LD
 7. **Orion-LD** stores entity data, notifies QuantumLeap via subscription
 8. **QuantumLeap** persists time-series data to CrateDB
+9. **Archiver** (CronJob) periodically reads old data from CrateDB, writes it as Parquet files to **MinIO** (partitioned by tenant/IMEI/timestamp), verifies the upload, then deletes the archived rows from CrateDB. A watermark stored in MinIO tracks progress to avoid re-archiving. Schedule is configurable (currently every 5 minutes for testing).
 
 ### Multi-Tenancy
 
@@ -249,6 +252,15 @@ Logs from all pods are collected by Grafana Alloy and stored in Loki. Open Grafa
 {pod=~"iot-agent.*"}     # IoT Agent logs
 ```
 
+### Alerting (Kubernetes)
+
+Grafana is provisioned with alert rules that monitor the archiver CronJob:
+
+- **Archiver job failed** — fires when archiver pod logs contain errors (FAILED, ERROR, ECONNREFUSED, panic, exception) in the last 5 minutes
+- **Archiver job produced no logs** — fires when no logs have been seen from archiver pods in 10 minutes, indicating the job may not be running
+
+Alerts are sent via email through the configured SMTP contact point. Alert rules and contact points are provisioned via `k8s/grafana/configmap.yaml`.
+
 ### Docker Compose
 
 > **Note:** Use `docker compose` or `docker-compose` depending on your Docker version.
@@ -289,6 +301,14 @@ Open http://localhost:4200 in browser
 **Query CrateDB directly:**
 ```sql
 SELECT * FROM "mtnaestved"."etgpstracker" ORDER BY time_index DESC LIMIT 10;
+```
+
+**MinIO Console:**
+Open http://localhost:9001 (login with MINIO_ROOT_USER / MINIO_ROOT_PASSWORD from secrets)
+
+Archived parquet files are stored in the `gps-archive` bucket with the path structure:
+```
+{tenant}/{imei}/{timestamp}.parquet
 ```
 
 ## Troubleshooting

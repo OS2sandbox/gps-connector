@@ -9,7 +9,7 @@ data:
       role = "pod"
     }
 
-    // Relabel: extract pod name, namespace, container name as labels
+    // Relabel: extract labels and build log file path
     discovery.relabel "pods" {
       targets = discovery.kubernetes.pods.targets
 
@@ -25,12 +25,29 @@ data:
         source_labels = ["__meta_kubernetes_pod_container_name"]
         target_label  = "container"
       }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+        separator     = "/"
+        target_label  = "__path__"
+        replacement   = "/var/log/pods/*$1/*.log"
+      }
     }
 
-    // Collect logs from discovered pods
-    loki.source.kubernetes "pods" {
-      targets    = discovery.relabel.pods.output
+    // Match pod log files on the node filesystem
+    local.file_match "pods" {
+      path_targets = discovery.relabel.pods.output
+    }
+
+    // Strip CRI prefix (timestamp, stdout/stderr, flags) from log lines
+    loki.process "cri" {
+      stage.cri {}
       forward_to = [loki.write.default.receiver]
+    }
+
+    // Collect logs from files (works for short-lived pods like cronjobs)
+    loki.source.file "pods" {
+      targets    = local.file_match.pods.targets
+      forward_to = [loki.process.cri.receiver]
     }
 
     // Send logs to Loki

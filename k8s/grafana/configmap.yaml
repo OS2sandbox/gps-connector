@@ -11,3 +11,105 @@ data:
         access: proxy
         url: http://loki:3100
         isDefault: true
+        uid: loki
+  alerting.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: archiver
+        folder: alerts
+        interval: 5m
+        rules:
+          - uid: archiver-failure
+            title: Archiver job failed
+            annotations:
+              summary: "{{ $labels.pod }} had {{ $values.reduce }} error(s) in the last 5 minutes"
+              logs_query: '{pod="{{ $labels.pod }}"} |~ "(?i)(FAILED|ERROR|ECONNREFUSED|panic|exception)"'
+            condition: threshold
+            data:
+              - refId: query
+                datasourceUid: loki
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: count_over_time({pod=~"cratedb-archiver.*"} |~ "(?i)(FAILED|ERROR|ECONNREFUSED|panic|exception)" [5m])
+                  queryType: range
+              - refId: reduce
+                datasourceUid: __expr__
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                model:
+                  type: reduce
+                  expression: query
+                  reducer: last
+              - refId: threshold
+                datasourceUid: __expr__
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                model:
+                  type: threshold
+                  expression: reduce
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params: [0]
+            for: 0s
+            noDataState: OK
+            execErrState: Alerting
+          - uid: archiver-silent
+            title: Archiver job produced no logs
+            annotations:
+              summary: "No logs from cratedb-archiver pods in the last 10 minutes — job may not be running"
+            condition: threshold
+            data:
+              - refId: query
+                datasourceUid: loki
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                model:
+                  expr: count_over_time({pod=~"cratedb-archiver.*"} [10m])
+                  queryType: range
+              - refId: reduce
+                datasourceUid: __expr__
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                model:
+                  type: reduce
+                  expression: query
+                  reducer: last
+              - refId: threshold
+                datasourceUid: __expr__
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                model:
+                  type: threshold
+                  expression: reduce
+                  conditions:
+                    - evaluator:
+                        type: lt
+                        params: [1]
+            for: 0s
+            noDataState: Alerting
+            execErrState: Alerting
+  contactpoints.yaml: |
+    apiVersion: 1
+    contactPoints:
+      - orgId: 1
+        name: default
+        receivers:
+          - uid: default-email
+            type: email
+            settings:
+              addresses: daniel@droidsagency.com
+  policies.yaml: |
+    apiVersion: 1
+    policies:
+      - orgId: 1
+        receiver: default
+        group_by: ["alertname"]

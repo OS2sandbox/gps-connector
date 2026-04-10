@@ -9,6 +9,8 @@ echo "RabbitMQ Management: http://localhost:15673"
 echo "Redis:               localhost:6379"
 echo "Grafana:             http://localhost:3000"
 echo "Loki:                http://localhost:3100"
+echo "MinIO API:           http://localhost:9000"
+echo "MinIO Console:       http://localhost:9001"
 echo "MQTT TLS:            localhost:8883 (via k3d loadbalancer)"
 echo ""
 kubectl port-forward svc/orion-ld 1026:1026 > /dev/null 2>&1 &
@@ -19,6 +21,7 @@ kubectl port-forward svc/rabbitmq 15673:15672 > /dev/null 2>&1 &
 kubectl port-forward svc/redis 6379:6379 > /dev/null 2>&1 &
 kubectl port-forward svc/grafana 3000:3000 > /dev/null 2>&1 &
 kubectl port-forward svc/loki 3100:3100 > /dev/null 2>&1 &
+kubectl port-forward svc/minio 9000:9000 9001:9001 > /dev/null 2>&1 &
 
 echo "=== All port-forwards running in background ==="
 echo "To stop: pkill -f 'kubectl port-forward'"
