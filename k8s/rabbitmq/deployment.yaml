@@ -12,6 +12,7 @@ spec:
       labels:
         app: rabbitmq
     spec:
+      hostname: rabbitmq
       containers:
         - name: rabbitmq
           image: rabbitmq:3.13-management

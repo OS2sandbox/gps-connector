@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cratedb-archiver
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: archiver
+              image: gps-archiver:latest
+              imagePullPolicy: Never
+              env:
+                - name: CRATE_HOST
+                  value: cratedb
+                - name: CRATE_PORT
+                  value: "4200"
+                - name: MINIO_ENDPOINT
+                  value: http://minio:9000
+                - name: MINIO_ROOT_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: gps-connector-secrets
+                      key: MINIO_ROOT_USER
+                - name: MINIO_ROOT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: gps-connector-secrets
+                      key: MINIO_ROOT_PASSWORD
+                - name: ARCHIVE_BUCKET
+                  value: gps-archive
+                - name: ARCHIVE_AFTER_MINUTES
+                  value: "5"
+                - name: DELETE_AFTER_MINUTES
+                  value: "10"
+          restartPolicy: Never

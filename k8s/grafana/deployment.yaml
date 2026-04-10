@@ -17,10 +17,39 @@ spec:
           image: grafana/grafana:11.6.0
           ports:
             - containerPort: 3000
+          env:
+            - name: GF_SMTP_ENABLED
+              value: "true"
+            - name: GF_SMTP_HOST
+              value: "smtp.office365.com:587"
+            - name: GF_SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: SMTP_USER
+            - name: GF_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: SMTP_PASSWORD
+            - name: GF_SMTP_FROM_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: SMTP_USER
           volumeMounts:
             - mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
               name: config
               subPath: datasources.yaml
+            - mountPath: /etc/grafana/provisioning/alerting/alerting.yaml
+              name: config
+              subPath: alerting.yaml
+            - mountPath: /etc/grafana/provisioning/alerting/contactpoints.yaml
+              name: config
+              subPath: contactpoints.yaml
+            - mountPath: /etc/grafana/provisioning/alerting/policies.yaml
+              name: config
+              subPath: policies.yaml
       volumes:
         - name: config
           configMap:
