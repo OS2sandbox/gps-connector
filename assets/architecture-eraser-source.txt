@@ -1,0 +1,78 @@
+title gps-connector
+
+legend {
+[color: black, label: GPS dataflow]
+[color: red, label: New tenant provisioning]
+[color: green, label: FleetOptimiser dataflow]
+[color: blue, label: New device provisioning]
+[color: orange, label: Serve cold data to Frontend]
+[color: grey, label: Observability / logging]
+}
+
+  Gps-device [icon: iot]
+
+  k8s [icon: k8s] {
+    LoadBalancer [icon: load-balancer, label: LoadBalancer]
+    Traefik [icon: traefik, label: Proxy/Gateway]
+    RabbitMQ [icon: rabbitmq, label: MQTT + AMQP Broker]
+    Bento [icon: map]
+    Redis [icon: redis]
+    IoT Agent JSON [icon: agent]
+    mongoDB [icon: database]
+    Orion-LD [icon: k8s-svc]
+    QuantumLeap [icon: activity]
+    CrateDB [icon: database]
+    KeyCloak [icon: keycloak]
+    Frontend [icon: web]
+    API layer [icon: api]
+    MinIO [icon: storage, label: Cold Storage (S3)]
+    cratedb-archiver [icon: clock, label: CronJob Archiver]
+    Observability [icon: log] {
+      Alloy [icon: search]
+      Loki [icon: database]
+      Grafana [icon: activity]
+    }
+  }
+
+  FleetOptimiser [icon: app, label: External application]
+  User [icon: user]
+
+  Gps-device -> LoadBalancer: Publish on own topic
+  LoadBalancer -> RabbitMQ: MQTT TLS passthrough
+  Bento -> RabbitMQ: AMQP consume raw
+  Bento -> RabbitMQ: AMQP publish normalized
+  Bento -> Redis: Lookup specific IMEI tenant
+  IoT Agent JSON -> RabbitMQ: AMQP subscribe $tenant-$device/$imei/data
+  IoT Agent JSON - mongoDB: IMEI lookup
+  IoT Agent JSON -> Orion-LD: NGSI-LD
+  Orion-LD -> mongoDB: device state persistence
+  QuantumLeap -> Orion-LD: Subscribe
+  QuantumLeap -> CrateDB: SQL
+  CrateDB -> QuantumLeap: data [color: green]
+  FleetOptimiser -> KeyCloak: [color: green]
+  KeyCloak -> FleetOptimiser: org-service-token [color: green]
+  FleetOptimiser -> Traefik: With org-service-token [color: green]
+  Traefik -> QuantumLeap: [color: green]
+  QuantumLeap -> CrateDB: request tenant data [color: green]
+  Traefik -> FleetOptimiser: [color: green]
+  QuantumLeap -> Traefik: [color: green]
+  User -> KeyCloak: Authenticate [color: blue]
+  KeyCloak -> User: org-token [color: blue]
+  User -> Traefik: [color: blue]
+  Traefik -> Frontend: [color: blue]
+  mongoDB -> Redis
+  Frontend -> Traefik: register new device [color: blue]
+  API layer -> Redis: [color: blue]
+  API layer -> IoT Agent JSON: [color: blue]
+  API layer -> QuantumLeap: Create subscription [color: red]
+  API layer -> IoT Agent JSON: new tenant [color: red]
+  Traefik -> API layer: [color: blue]
+  CrateDB -> cratedb-archiver: Pull non-active data
+  cratedb-archiver -> MinIO: Store Parquet files
+  Frontend -> Traefik: Request cold data [color: orange]
+  Traefik -> API layer: Request cold data [color: orange]
+  API layer -> MinIO: Fetch cold data[color: orange]
+  MinIO -> API layer: Serve cold data [color: orange]
+  Alloy --> k8s: Scrapes all container logs [color: grey]
+  Alloy -> Loki: Forwards log streams [color: grey]
+  Grafana -> Loki: LogQL queries [color: grey]
