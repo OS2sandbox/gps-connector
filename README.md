@@ -53,6 +53,14 @@ This is an early-stage sandbox project intended to explore and validate:
 The stack follows the OS2 proposal ("*Architectural proposal*")[https://janhalen.github.io/enterprise-architecture-patterns/proposals/2025-09-25-gps-agent-and-standard-broker.html]. 
 
 In short, the proposal aims to enable direct device support by combining open-source components and standardized data flows, making GPS integrations simpler to replicate and scale. 
+
+The diagram below reflects the most recent iteration of the stack and its dataflows:
+
+<p align="center">
+  <img src="assets/architecture-diagram.png" alt="Architecture diagram showing the GPS connector dataflow through the FIWARE stack, including GPS device ingress, multi-tenant routing, time-series storage, cold-storage archiving, and observability" />
+</p>
+
+> Diagram source for [Eraser.io](https://eraser.io): [`assets/architecture-eraser-source.txt`](assets/architecture-eraser-source.txt)
  
 ### Relationship to OS2FleetOptimiser
 OS2FleetOptimiser is an open-source fleet optimisation solution in Denmark, now anchored in OS2 and used across multiple authorities. 
