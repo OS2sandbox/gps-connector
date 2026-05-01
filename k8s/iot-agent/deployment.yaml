@@ -18,7 +18,7 @@ spec:
           command: ['sh', '-c', 'until nc -z rabbitmq 5672; do echo "Waiting for RabbitMQ..."; sleep 2; done']
       containers:
         - name: iot-agent
-          image: fiware/iotagent-json:latest
+          image: fiware/iotagent-json:3.14.0
           ports:
             - containerPort: 4041
             - containerPort: 7896
@@ -33,12 +33,8 @@ spec:
               value: "7896"
             - name: IOTA_REGISTRY_TYPE
               value: mongodb
-            - name: IOTA_MONGO_HOST
-              value: mongodb
-            - name: IOTA_MONGO_PORT
-              value: "27017"
-            - name: IOTA_MONGO_DB
-              value: iotagent-json
+            - name: IOTA_MONGO_URI
+              value: mongodb://mongodb:27017/iotagent-json
             - name: IOTA_PROVIDER_URL
               value: http://iot-agent:4041
             - name: IOTA_DEFAULT_RESOURCE

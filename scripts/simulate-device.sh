@@ -18,9 +18,17 @@ IMEI="$2"
 COUNT="${3:-1}"
 MQTT_HOST="${MQTT_HOST:-localhost}"
 MQTT_PORT="${MQTT_PORT:-8883}"
-MQTT_CAFILE="${MQTT_CAFILE:-mosq_certs/ca.crt}"
-MQTT_CERT="${MQTT_CERT:-mosq_certs/client.crt}"
-MQTT_KEY="${MQTT_KEY:-mosq_certs/client.key}"
+# If MQTT_BUNDLE is set (e.g. a per-device .pem from /devices/certs/<id>/download),
+# it provides cafile, cert and key in one file.
+if [[ -n "${MQTT_BUNDLE:-}" ]]; then
+  MQTT_CAFILE="${MQTT_BUNDLE}"
+  MQTT_CERT="${MQTT_BUNDLE}"
+  MQTT_KEY="${MQTT_BUNDLE}"
+else
+  MQTT_CAFILE="${MQTT_CAFILE:-mosq_certs/ca.crt}"
+  MQTT_CERT="${MQTT_CERT:-mosq_certs/client.crt}"
+  MQTT_KEY="${MQTT_KEY:-mosq_certs/client.key}"
+fi
 TOPIC="${DEVICE_TYPE}/${IMEI}/data"
 
 # Base coordinates: As decimal string for Teltonika
@@ -29,19 +37,20 @@ BASE_LON_DEC="11.760"
 
 publish_teltonika() {
   local lat lon speed ang alt sat ts_ms
-  # Add small random offset to base coordinates (4th-6th decimal places)
-  lat="${BASE_LAT_DEC}$(printf '%03d' $((RANDOM % 1000)))"
-  lon="${BASE_LON_DEC}$(printf '%03d' $((RANDOM % 1000)))"
-  speed=$((RANDOM % 120))
-  ang=$((RANDOM % 360))
+  # LAT/LON/SP/ANG/TS_MS env vars override the random values (used by route wrappers).
+  lat="${LAT:-${BASE_LAT_DEC}$(printf '%03d' $((RANDOM % 1000)))}"
+  lon="${LON:-${BASE_LON_DEC}$(printf '%03d' $((RANDOM % 1000)))}"
+  speed="${SP:-$((RANDOM % 120))}"
+  ang="${ANG:-$((RANDOM % 360))}"
   alt=$((30 + RANDOM % 50))
   sat=$((8 + RANDOM % 10))
-  ts_ms="$(date +%s)000"
+  ts_ms="${TS_MS:-$(date +%s)000}"
 
  mosquitto_pub -h "${MQTT_HOST}" -p "${MQTT_PORT}" -t "${TOPIC}" \
   ${MQTT_CAFILE:+--cafile "${MQTT_CAFILE}"} \
   ${MQTT_CERT:+--cert "${MQTT_CERT}"} \
   ${MQTT_KEY:+--key "${MQTT_KEY}"} \
+  ${MQTT_INSECURE:+--insecure} \
   -k 60 \
   -q 1 \
   -m '{

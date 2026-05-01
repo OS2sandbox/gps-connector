@@ -9,15 +9,18 @@ data:
 
     ## MQTT listeners (only TLS for external devices, no internal TCP needed)
     mqtt.listeners.ssl.1 = 0.0.0.0:8883
-    mqtt.allow_anonymous = true
+    mqtt.allow_anonymous = false
+    mqtt.ssl_cert_login = true
     mqtt.vhost            = /
     mqtt.exchange         = amq.topic
-    mqtt.default_user     = $(RABBITMQ_DEFAULT_USER)
-    mqtt.default_pass     = $(RABBITMQ_DEFAULT_PASS)
 
     ## Internal service account (Bento AMQP + IoT Agent AMQP)
     default_user = $(RABBITMQ_DEFAULT_USER)
     default_pass = $(RABBITMQ_DEFAULT_PASS)
+
+    ## Cert-based MQTT auth: CN of client cert becomes the MQTT username,
+    ## which must exist as a RabbitMQ user (provisioned per-device by the API).
+    ssl_cert_login_from = common_name
 
     ## TLS (for device-facing port 8883)
     ssl_options.cacertfile = /etc/rabbitmq/certs/ca.crt

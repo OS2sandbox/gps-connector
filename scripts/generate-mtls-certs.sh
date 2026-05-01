@@ -78,12 +78,32 @@ EOF
 openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
   -out client.crt -days "$LEAF_DAYS" -sha256 -extfile client_ext.cnf
 
-# 4) Teltonika root file
-cp ca.crt root.pem
+# 4) Teltonika client file aliases
 cp client.crt client.pem.crt
 cp client.key client.pem.key
 cp client.crt certificate.pem.crt
 cp client.key private.pem.key
+
+# 5) Teltonika FOTA WEB combined bundle (FW >= 03.28.07.Rev.01):
+#    PKCS#8 private key -> device cert -> root CA, LF line endings.
+{
+  openssl pkcs8 -topk8 -nocrypt -in client.key
+  cat client.crt ca.crt
+} > root.pem
+
+# 6) Sync k8s/secret.yaml if present (keeps cluster certs in sync with disk)
+SECRET_FILE="$REPO_ROOT/k8s/secret.yaml"
+if [ -f "$SECRET_FILE" ]; then
+  CA_B64=$(base64 -w0 ca.crt)
+  SRV_CRT_B64=$(base64 -w0 server.crt)
+  SRV_KEY_B64=$(base64 -w0 server.key)
+  sed -i \
+    -e "s|^  ca.crt: .*|  ca.crt: $CA_B64|" \
+    -e "s|^  server.crt: .*|  server.crt: $SRV_CRT_B64|" \
+    -e "s|^  server.key: .*|  server.key: $SRV_KEY_B64|" \
+    "$SECRET_FILE"
+  echo "Synced ca.crt/server.crt/server.key into $SECRET_FILE"
+fi
 
 echo
 echo "Verification:"
@@ -93,6 +113,15 @@ openssl x509 -in server.crt -noout -text | awk '
 '
 echo "  CA -> server verify:"
 openssl verify -CAfile ca.crt server.crt
+echo "  root.pem blocks: $(grep -cE '^-----BEGIN' root.pem) (expected 3)"
+FOTA_KEY_PUB=$(openssl pkey -in root.pem -pubout -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
+FOTA_CRT_PUB=$(openssl x509 -in client.crt -pubkey -noout | openssl pkey -pubin -outform DER 2>/dev/null | sha256sum | awk '{print $1}')
+if [ "$FOTA_KEY_PUB" = "$FOTA_CRT_PUB" ]; then
+  echo "  root.pem key<->cert pubkey: OK"
+else
+  echo "  root.pem key<->cert pubkey: MISMATCH" >&2
+  exit 1
+fi
 
 echo
 echo "Files created:"

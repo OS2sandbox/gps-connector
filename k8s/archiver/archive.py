@@ -29,7 +29,9 @@ def fetch_old_data(cursor, schema, from_ms, to_ms):
     table = f'"{schema}"."etgpstracker"'
     cursor.execute(
         f"SELECT entity_id, time_index, latitude, longitude, speed, "
-        f"devicetimestamp, ignition, moving "
+        f"heading, devicetimestamp, ignition, moving, "
+        f"plate, vehicle_id, make, model, cost, associated_location, "
+        f"fuel_type, vehicle_type, fuel_usage, capacity, leasing_end_date "
         f"FROM {table} WHERE time_index >= ? "
         f"AND time_index < ? "
         f"ORDER BY entity_id, time_index",
@@ -53,9 +55,21 @@ def write_parquet(rows):
           ("latitude", pa.float64()),
           ("longitude", pa.float64()),
           ("speed", pa.float64()),
+          ("heading", pa.float64()),
           ("devicetimestamp", pa.int64()),
           ("ignition", pa.int64()),
           ("moving", pa.int64()),
+          ("plate", pa.string()),
+          ("vehicle_id", pa.string()),
+          ("make", pa.string()),
+          ("model", pa.string()),
+          ("cost", pa.int64()),
+          ("associated_location", pa.string()),
+          ("fuel_type", pa.string()),
+          ("vehicle_type", pa.string()),
+          ("fuel_usage", pa.float64()),
+          ("capacity", pa.int64()),
+          ("leasing_end_date", pa.int64()),
       ])
 
     arrays = [
