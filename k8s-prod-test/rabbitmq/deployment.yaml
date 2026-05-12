@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      hostname: rabbitmq
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3.13-management
+          ports:
+            - containerPort: 5672    # AMQP
+            - containerPort: 8883    # MQTT TLS
+            - containerPort: 15672   # Management UI
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_PASS
+          volumeMounts:
+            - name: config
+              mountPath: /etc/rabbitmq/rabbitmq.conf
+              subPath: rabbitmq.conf
+            - name: config
+              mountPath: /etc/rabbitmq/enabled_plugins
+              subPath: enabled_plugins
+            - name: certs
+              mountPath: /etc/rabbitmq/certs
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/rabbitmq
+          livenessProbe:
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: rabbitmq-config
+        - name: certs
+          secret:
+            secretName: rabbitmq-tls
+            items:
+              - key: ca.crt
+                path: ca.crt
+              - key: server.crt
+                path: server.crt
+              - key: server.key
+                path: server.key
+        - name: data
+          persistentVolumeClaim:
+            claimName: rabbitmq-data

@@ -1,0 +1,18 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: api
+spec:
+  host: gps-connector-api.droidsagencyai.com
+  tls:
+    cert-manager:
+      cluster-issuer: letsencrypt-prod
+    secret: gps-connector-api-tls
+  upstreams:
+    - name: api
+      service: api
+      port: 8080
+  routes:
+    - path: /
+      action:
+        pass: api

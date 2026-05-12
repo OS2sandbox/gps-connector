@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      serviceAccountName: api
+      initContainers:
+        - name: wait-for-deps
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z iot-agent 4041 && \
+                    nc -z orion-ld 1026 && \
+                    nc -z redis 6379 && \
+                    nc -z cratedb 5432 && \
+                    nc -z minio 9000; do
+                echo "waiting for upstreams..."
+                sleep 2
+              done
+      containers:
+        - name: api
+          image: droidsagencyairegistry.azurecr.io/gps-api:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: API_ADDR
+              value: ":8080"
+            - name: IOT_AGENT_URL
+              value: http://iot-agent:4041
+            - name: ORION_URL
+              value: http://orion-ld:1026
+            - name: REDIS_ADDR
+              value: redis:6379
+            - name: CRATE_DSN
+              value: postgres://crate@cratedb:5432/doc?sslmode=disable
+            - name: MINIO_ENDPOINT
+              value: http://minio:9000
+            - name: ARCHIVE_BUCKET
+              value: gps-archive
+            - name: OIDC_ISSUER_URL
+              value: https://auth.droidsagencyai.com/realms/GPS-Connector-Test
+            - name: OIDC_CLIENT_ID
+              value: gps-connector-api
+            - name: ROOT_CA_CERT_PATH
+              value: /etc/pki/root/ca.crt
+            - name: ROOT_CA_KEY_PATH
+              value: /etc/pki/root/ca.key
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: CORS_ALLOWED_ORIGINS
+              value: "http://localhost:5173,http://localhost:3000,https://gps-connector.droidsagencyai.com"
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: MINIO_ROOT_PASSWORD
+            - name: RABBITMQ_MGMT_URL
+              value: http://rabbitmq:15672
+            - name: RABBITMQ_MGMT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_MGMT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_PASS
+          volumeMounts:
+            - name: root-ca
+              mountPath: /etc/pki/root
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+      volumes:
+        - name: root-ca
+          secret:
+            secretName: gps-connector-root-ca

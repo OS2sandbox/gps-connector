@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bento
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bento
+  template:
+    metadata:
+      labels:
+        app: bento
+    spec:
+      initContainers:
+        - name: wait-for-rabbitmq
+          image: busybox
+          command: ['sh', '-c', 'until nc -z rabbitmq 5672; do echo "Waiting for RabbitMQ..."; sleep 2; done']
+      containers:
+        - name: bento
+          image: ghcr.io/warpstreamlabs/bento:latest
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: RABBITMQ_DEFAULT_PASS
+          volumeMounts:
+            - name: config
+              mountPath: /bento.yaml
+              subPath: bento.yaml
+      volumes:
+        - name: config
+          configMap:
+            name: bento-config
