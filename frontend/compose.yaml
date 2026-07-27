@@ -1,0 +1,14 @@
+name: gps-connector-frontend
+
+services:
+  web:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN}
+    env_file:
+      - .env.local
+    ports:
+      - "127.0.0.1:3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
