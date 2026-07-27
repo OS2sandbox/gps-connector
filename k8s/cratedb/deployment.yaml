@@ -27,6 +27,7 @@ spec:
           ports:
             - containerPort: 4200
             - containerPort: 4300
+            - containerPort: 5432
           env:
             - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
               value: "true"

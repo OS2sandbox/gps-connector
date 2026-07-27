@@ -5,6 +5,7 @@ echo "Orion-LD:            http://localhost:1026"
 echo "IoT Agent:           http://localhost:14041 (north) / http://localhost:4041 (delete)"
 echo "QuantumLeap:         http://localhost:8668"
 echo "CrateDB UI:          http://localhost:4200"
+echo "CrateDB PSQL:        localhost:5432"
 echo "RabbitMQ Management: http://localhost:15673"
 echo "Redis:               localhost:6379"
 echo "Grafana:             http://localhost:3000"
@@ -16,7 +17,7 @@ echo ""
 kubectl port-forward svc/orion-ld 1026:1026 > /dev/null 2>&1 &
 kubectl port-forward svc/iot-agent 14041:4041 4041:4041 > /dev/null 2>&1 &
 kubectl port-forward svc/quantumleap 8668:8668 > /dev/null 2>&1 &
-kubectl port-forward svc/cratedb 4200:4200 > /dev/null 2>&1 &
+kubectl port-forward svc/cratedb 4200:4200 5432:5432 > /dev/null 2>&1 &
 kubectl port-forward svc/rabbitmq 15673:15672 > /dev/null 2>&1 &
 kubectl port-forward svc/redis 6379:6379 > /dev/null 2>&1 &
 kubectl port-forward svc/grafana 3000:3000 > /dev/null 2>&1 &

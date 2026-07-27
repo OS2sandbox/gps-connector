@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: cratedb-archiver
 spec:
-  schedule: "*/5 * * * *"
+  schedule: "0 0,12 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 1
@@ -35,7 +35,7 @@ spec:
                 - name: ARCHIVE_BUCKET
                   value: gps-archive
                 - name: ARCHIVE_AFTER_MINUTES
-                  value: "5"
+                  value: "1440"
                 - name: DELETE_AFTER_MINUTES
-                  value: "10"
+                  value: "2880"
           restartPolicy: Never

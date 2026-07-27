@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orion-ld
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orion-ld
+  template:
+    metadata:
+      labels:
+        app: orion-ld
+    spec:
+      containers:
+        - name: orion-ld
+          image: fiware/orion-ld:latest
+          ports:
+            - containerPort: 1026
+          env:
+            - name: ORIONLD_MULTI_SERVICE
+              value: "TRUE"
+          args: ["-logLevel", "INFO", "-dbhost", "mongodb"]

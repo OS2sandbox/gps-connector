@@ -1,0 +1,17 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: mqtt
+  namespace: gps-connector
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 8883
+        name: mqtt-tls
+        protocol: TLS
+      tls:
+        mode: PASSTHROUGH
+      hosts:
+        - "*"

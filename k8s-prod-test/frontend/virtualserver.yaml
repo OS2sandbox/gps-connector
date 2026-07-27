@@ -1,0 +1,24 @@
+apiVersion: k8s.nginx.org/v1
+kind: VirtualServer
+metadata:
+  name: frontend
+spec:
+  host: gps-connector.droidsagencyai.com
+  server-snippets: |
+    large_client_header_buffers 4 32k;
+  tls:
+    cert-manager:
+      cluster-issuer: letsencrypt-prod
+    secret: gps-connector-frontend-tls
+  upstreams:
+    - name: frontend
+      service: frontend
+      port: 3000
+      buffer-size: 32k
+      buffers:
+        number: 4
+        size: 32k
+  routes:
+    - path: /
+      action:
+        pass: frontend

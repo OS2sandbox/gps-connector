@@ -1,0 +1,56 @@
+lsagapiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cratedb
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cratedb
+  template:
+    metadata:
+      labels:d
+        app: cratedb
+    spec:
+      initContainers:
+        - name: fix-permissions
+          image: busybox
+          command: [ "sh", "-c", "mkdir -p /crate/logs && chown -R 1000:1000 /crate/logs" ]
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - mountPath: /crate/logs
+              name: crate-logs
+      containers:
+        - name: cratedb
+          image: crate:4.6.7
+          ports:
+            - containerPort: 4200
+            - containerPort: 4300
+            - containerPort: 5432
+          env:
+            - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
+              value: "true"
+          command: [ "crate" ]
+          args:
+            - -Cnode.store.allow_mmap=false
+            - -Cauth.host_based.enabled=false
+            - -Ccluster.name=democluster
+            - -Chttp.cors.enabled=true
+            - -Chttp.cors.allow-origin=*
+          volumeMounts:
+            - mountPath: /data
+              name: cratedb-data
+            - mountPath: /crate/logs
+              name: crate-logs
+      volumes:
+        - name: cratedb-data
+          persistentVolumeClaim:
+            claimName: cratedb-data
+        - name: crate-logs
+          emptyDir: {}
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000

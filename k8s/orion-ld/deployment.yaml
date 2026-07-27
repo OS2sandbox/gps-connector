@@ -12,6 +12,8 @@ spec:
       labels:
         app: orion-ld
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: orion-ld
           image: fiware/orion-ld:latest

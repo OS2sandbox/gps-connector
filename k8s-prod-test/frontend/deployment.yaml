@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+        - name: frontend
+          image: droidsagencyairegistry.azurecr.io/gps-frontend:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: BETTER_AUTH_URL
+              value: https://gps-connector.droidsagencyai.com
+            - name: KEYCLOAK_CLIENT_ID
+              value: gps-frontend
+            - name: KEYCLOAK_DISCOVERY_URL
+              value: https://auth.droidsagencyai.com/realms/GPS-Connector-Test/.well-known/openid-configuration
+            - name: GPS_CONNECTOR_API_URL
+              value: http://api:8080
+            - name: BETTER_AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: BETTER_AUTH_SECRET
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gps-connector-secrets
+                  key: KEYCLOAK_CLIENT_SECRET
+          livenessProbe:
+            httpGet:
+              path: /sign-in
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /sign-in
+              port: 3000
+            initialDelaySeconds: 2
+            periodSeconds: 5
