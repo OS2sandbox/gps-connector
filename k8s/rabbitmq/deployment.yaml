@@ -44,24 +44,26 @@ spec:
             - name: data
               mountPath: /var/lib/rabbitmq
           livenessProbe:
-            exec:
-              command: ["rabbitmq-diagnostics", "ping"]
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 60
+            periodSeconds: 30
             timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             exec:
-              command: ["rabbitmq-diagnostics", "check_port_connectivity"]
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
             initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 3
       volumes:
         - name: config
           configMap:
             name: rabbitmq-config
         - name: certs
           secret:
-            secretName: gps-connector-secrets
+            secretName: rabbitmq-tls
             items:
               - key: ca.crt
                 path: ca.crt

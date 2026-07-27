@@ -73,6 +73,7 @@ pipeline:
                 root.lon = $coords.index(1).number()
                 root.spd = $r.sp             
                 root.ts = $r.ts / 1000
+                root.ang = $r.ang
                 root.ignition = $r.get("239")
                 root.moving = $r.get("240") 
 

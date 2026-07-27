@@ -12,3 +12,6 @@ spec:
     - name: transport
       port: 4300
       targetPort: 4300
+    - name: psql
+      port: 5432
+      targetPort: 5432
