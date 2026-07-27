@@ -12,6 +12,8 @@ spec:
       labels:
         app: quantumleap
     spec:
+      nodeSelector:
+        kubernetes.io/arch: amd64
       containers:
         - name: quantumleap
           image: orchestracities/quantumleap:latest
