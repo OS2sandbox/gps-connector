@@ -5,3 +5,9 @@ mosq_certs/*
 !mosq_certs/.gitkeep
 
 k8s/secret.yaml
+k8s-prod-test/secret.yaml
+
+api/run-local.sh
+api/api
+
+/pki/
