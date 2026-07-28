@@ -1,4 +1,5 @@
 import { Container } from "@/components/container"
+import { TenantCertificateCard } from "@/components/tenant-certificate-card"
 
 import { OverviewTable } from "./overview-table"
 
@@ -9,6 +10,9 @@ export default function OverviewPage() {
       <p className="mt-2 text-sm text-muted-foreground">
         All registered devices and their vehicles.
       </p>
+      <div className="mt-6">
+        <TenantCertificateCard />
+      </div>
       <div className="mt-6">
         <OverviewTable />
       </div>

@@ -19,10 +19,6 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTenantImeis } from "@/hooks/use-tenant-imeis"
-import {
-  downloadDeviceCertificate,
-  downloadDeviceCertificatesBulk,
-} from "@/lib/certificate-download"
 import { GPS_DEVICES, type GpsDevice } from "@/lib/devices"
 import { type DeviceRecord } from "@/lib/devices-store"
 import { postDevices } from "@/lib/gps-client"
@@ -42,18 +38,12 @@ export function RegisterForm() {
 
   const [selectedDevice, setSelectedDevice] = useState<GpsDevice | "">("")
   const [deviceMissing, setDeviceMissing] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
 
   const requireDevice = () => {
     if (selectedDevice) return true
     setDeviceMissing(true)
     return false
   }
-
-  const [downloadingImeis, setDownloadingImeis] = useState<Set<string>>(
-    () => new Set()
-  )
-  const [isDownloadingAll, setIsDownloadingAll] = useState(false)
 
   const submitManual = async (imei: string): Promise<ManualSubmitResult> => {
     if (!selectedDevice) {
@@ -71,18 +61,7 @@ export function RegisterForm() {
         return { ok: false, error: "Registration failed" }
       }
       if (result.status === "created") {
-        addRecords([
-          {
-            imei,
-            gpsDevice: selectedDevice,
-            certificateDownload: response.cert_download
-              ? {
-                  batchId: response.cert_download.batch_id,
-                  expiresAt: response.cert_download.expires_at,
-                }
-              : null,
-          },
-        ])
+        addRecords([{ imei, gpsDevice: selectedDevice }])
         tenant.markRegistered([imei])
         return { ok: true }
       }
@@ -106,22 +85,12 @@ export function RegisterForm() {
       const response = await postDevices(
         payload.newImeis.map((imei) => ({ imei, device_type: selectedDevice }))
       )
-      const batchDownload = response.cert_download
-        ? {
-            batchId: response.cert_download.batch_id,
-            expiresAt: response.cert_download.expires_at,
-          }
-        : null
       const newRecords: DeviceRecord[] = []
       const alreadyRegisteredImeis: string[] = []
       const failedImeis: string[] = []
       for (const result of response.results) {
         if (result.status === "created") {
-          newRecords.push({
-            imei: result.imei,
-            gpsDevice: selectedDevice,
-            certificateDownload: batchDownload,
-          })
+          newRecords.push({ imei: result.imei, gpsDevice: selectedDevice })
         } else if (result.status === "already_registered") {
           alreadyRegisteredImeis.push(result.imei)
         } else {
@@ -139,41 +108,6 @@ export function RegisterForm() {
       return { status: "partial", failedImeis, alreadyRegisteredImeis }
     } catch {
       return { status: "failed", error: "Registration failed" }
-    }
-  }
-
-  const markDownloading = (imei: string, busy: boolean) => {
-    setDownloadingImeis((prev) => {
-      const next = new Set(prev)
-      if (busy) next.add(imei)
-      else next.delete(imei)
-      return next
-    })
-  }
-
-  const handleDownloadCertificate = async (record: DeviceRecord) => {
-    if (downloadingImeis.has(record.imei)) return
-    markDownloading(record.imei, true)
-    setActionError(null)
-    try {
-      await downloadDeviceCertificate(record)
-    } catch {
-      setActionError("Could not download certificate")
-    } finally {
-      markDownloading(record.imei, false)
-    }
-  }
-
-  const handleDownloadAll = async () => {
-    if (isDownloadingAll) return
-    setIsDownloadingAll(true)
-    setActionError(null)
-    try {
-      await downloadDeviceCertificatesBulk(records)
-    } catch {
-      setActionError("Could not download certificates")
-    } finally {
-      setIsDownloadingAll(false)
     }
   }
 
@@ -244,14 +178,7 @@ export function RegisterForm() {
 
       <Separator />
 
-      <GeneratedSection
-        records={records}
-        actionError={actionError}
-        downloadingImeis={downloadingImeis}
-        isDownloadingAll={isDownloadingAll}
-        onDownloadAll={handleDownloadAll}
-        onDownloadCertificate={handleDownloadCertificate}
-      />
+      <GeneratedSection records={records} />
     </div>
   )
 }

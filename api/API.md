@@ -8,6 +8,7 @@ Multi-tenant API for GPS device provisioning, position queries, archiving, and P
 - **Privileges** come from the base64-encoded `privileges` XML claim, decoded into a list of URNs:
   - `urn:dk:kombit:gps-connector:read` — required for read endpoints.
   - `urn:dk:kombit:gps-connector:write` — required for write endpoints.
+  - `urn:dk:kombit:gps-connector:admin` — required to obtain or rotate the tenant certificate.
   - `urn:dk:kombit:gps-connector:ExternalApplication` — narrow role for external apps; grants only `GET /positions`.
 - Cross-tenant access returns `404 not found` (no enumeration leakage).
 
@@ -24,7 +25,7 @@ Multi-tenant API for GPS device provisioning, position queries, archiving, and P
 |---|---|---|---|
 | GET | `/healthz` | — | Liveness probe |
 | GET | `/me` | `:read` | Return JWT claims for the calling user |
-| POST | `/devices` | `:write` | Bulk-create devices, issue device certs |
+| POST | `/devices` | `:write` | Bulk-create devices |
 | GET | `/devices` | `:read` | List all devices for the tenant with latest position + metadata |
 | PATCH | `/devices` | `:write` | Bulk-update device metadata |
 | DELETE | `/devices` | `:write` | Bulk-delete devices (CrateDB history preserved) |
@@ -32,10 +33,9 @@ Multi-tenant API for GPS device provisioning, position queries, archiving, and P
 | POST | `/archive` | `:read` | Start an async CSV export from cold storage |
 | GET | `/archive/{id}` | `:read` | Poll export job status |
 | GET | `/archive/{id}/download` | `:read` | Stream the exported CSV |
-| POST | `/devices/certs/regenerate` | `:write` | Regenerate device certs for one or more IMEIs |
-| GET | `/devices/certs/{batch_id}/download` | `:write` | Download a zip of device cert bundles |
-| GET | `/tenant/cert` | `:read` | Get tenant CA metadata (subject/issuer/expiry) |
-| POST | `/tenant/cert/regenerate` | `:write` | Full PKI reset — new tenant CA + new device certs for all devices |
+| GET | `/tenant/cert` | `:read` | Get tenant certificate metadata (subject/issuer/expiry) |
+| POST | `/tenant/cert` | `:admin` | Get-or-issue the tenant certificate; returns the PEM bundle |
+| POST | `/tenant/cert/rotate` | `:admin` | Issue a new tenant certificate; returns the PEM bundle |
 
 Detailed contracts for each endpoint follow below.
 
@@ -65,7 +65,11 @@ Returns selected JWT claims for the calling user.
   "sub": "...",
   "cvr": "12345678",
   "idp": "...",
-  "privileges": "PFByaXZpbGVnZUxpc3Q+..."
+  "privileges": "PFByaXZpbGVnZUxpc3Q+...",
+  "privilege_urns": [
+    "urn:dk:kombit:gps-connector:read",
+    "urn:dk:kombit:gps-connector:write"
+  ]
 }
 ```
 
@@ -75,6 +79,7 @@ Returns selected JWT claims for the calling user.
 | `cvr` | Tenant CVR — drives all multi-tenant scoping |
 | `idp` | Identity provider that issued the token |
 | `privileges` | Base64-encoded `<PrivilegeList>` XML from KOMBIT — returned as-is, decoded server-side for authz checks |
+| `privilege_urns` | The same privileges decoded into a list, so clients can hide actions the user is not allowed to perform |
 
 ---
 
@@ -84,7 +89,9 @@ Returns selected JWT claims for the calling user.
 
 Privilege: `:write`. Bulk-create devices.
 
-Provisions across the stack: ensures tenant CA exists, creates IoT-Agent service group + Orion subscription if missing, creates devices in IoT Agent, registers tenant-mapping in Redis, creates Orion entity stub, and issues a device certificate signed by the tenant CA.
+Provisions across the stack: creates IoT-Agent service group + Orion subscription if missing, creates devices in IoT Agent, registers tenant-mapping in Redis, and creates the Orion entity stub.
+
+Devices do not get individual certificates — all devices belonging to a tenant connect with the tenant certificate from `POST /tenant/cert`.
 
 **Request:**
 ```json
@@ -106,25 +113,18 @@ Provisions across the stack: ensures tenant CA exists, creates IoT-Agent service
     { "imei": "123456789012345", "status": "created" },
     { "imei": "123456789012346", "status": "already_registered" },
     { "imei": "123456789012347", "status": "error", "error": "..." }
-  ],
-  "cert_download": {
-    "batch_id": "...",
-    "url": "/devices/certs/.../download",
-    "expires_at": "2026-05-06T11:00:00Z"
-  }
+  ]
 }
 ```
 
 `provisioned.service_groups_created` lists newly created `<cvr>-<device_type>` IoT-Agent service groups. `subscriptions_created` lists CVRs for which a new Orion subscription was set up. Both arrays are empty when nothing new was provisioned (idempotent retry).
 
-`cert_download` is present only when at least one device was newly created. Use the URL within 1 hour to download a zip with `<imei>.pem` files (4-block PEM bundles: device key + device cert + tenant CA + root CA). Devices with status `already_registered` get **no** cert returned — the only way to obtain a fresh cert for an existing device is via `POST /devices/certs/regenerate`.
-
 `results[].status` values:
 
 | Status | Meaning |
 |---|---|
-| `created` | New device, provisioned everywhere, cert included in batch |
-| `already_registered` | Same tenant already owns this IMEI; no-op, no new cert |
+| `created` | New device, provisioned everywhere |
+| `already_registered` | Same tenant already owns this IMEI; no-op |
 | `error` | Provisioning failed at some step; `error` field has details |
 
 Common `error` reasons:
@@ -135,7 +135,6 @@ Common `error` reasons:
 - `create device: ...` — IoT Agent rejected the device batch.
 - `redis error: ...` — Redis read/write failed.
 - `orion error: ...` — Orion entity creation failed after device was provisioned.
-- `cert generation failed` — RSA key/cert generation failed (very rare). Device IS in IoT Agent + Orion + Redis; recover via `POST /devices/certs/regenerate`.
 
 **Validation (all return `400 Bad Request`):**
 
@@ -158,6 +157,7 @@ Returns all devices owned by the calling tenant with their latest position and m
   "devices": [
     {
       "imei": "123456789012345",
+      "device_type": "teltonika",
       "latitude": 55.6761,
       "longitude": 12.5683,
       "speed": 42.5,
@@ -185,6 +185,7 @@ Field reference:
 | Field | Type | Notes |
 |---|---|---|
 | `imei` | string | Always present |
+| `device_type` | string | Device model given at registration, e.g. `"teltonika"` |
 | `latitude`, `longitude`, `speed` | number | Last known position; absent until device has reported |
 | `device_timestamp` | int (unix seconds) | When device produced the position |
 | `ignition`, `moving` | int (0 or 1) | Device state flags |
@@ -408,68 +409,34 @@ Privilege: `:read`. Streams the CSV through the API (MinIO is not exposed extern
 
 **Response 200** (`Content-Type: text/csv`, `Content-Disposition: attachment`).
 
+Columns, in order:
+
+```
+imei, time_index, device_timestamp,
+latitude, longitude, speed, heading, ignition, moving,
+plate, vehicle_id, make, model, cost,
+associated_location, fuel_type, vehicle_type,
+fuel_usage, capacity, leasing_end_date
+```
+
+`imei` and `time_index` (RFC3339) match the field names and formats used by `GET /positions`; `device_timestamp` is unix seconds. Empty cells mean the value was NULL in cold storage. Rows without a `device_timestamp` (metadata-only audit rows) are skipped.
+
 Returns `409 Conflict` if status is not `ready`.
 
 ---
 
 ## Certificates (PKI)
 
-### `GET /devices/certs/{batch_id}/download`
-
-Privilege: `:write`. Downloads a zip of device certificate bundles.
-
-**Response 200** (`Content-Type: application/zip`):
-- Filename: `device-certs-<cvr>-<YYYY-MM-DD>.zip`
-- Contents: one `<imei>.pem` per device, each a 4-block PEM bundle (PKCS#8 device key + device cert + tenant CA cert + root CA cert).
-
-Returns `404` if `batch_id` is unknown to the calling tenant or expired (1h TTL).
-
----
-
-### `POST /devices/certs/regenerate`
-
-Privilege: `:write`. Regenerates device certificates for one or more existing devices.
-
-**Request:**
-```json
-{ "imeis": ["123456789012345", "123456789012346"] }
-```
-
-**Response 200/207:**
-```json
-{
-  "results": [
-    { "imei": "123456789012345", "status": "regenerated" },
-    { "imei": "123456789012346", "status": "not_found" }
-  ],
-  "cert_download": {
-    "batch_id": "...",
-    "url": "/devices/certs/.../download",
-    "expires_at": "..."
-  }
-}
-```
-
-`status` values: `regenerated`, `not_found` (also returned for cross-tenant IMEIs), `error`.
-
-Old device certs remain valid until their natural expiry — no revocation.
-
-**Validation (all return `400 Bad Request`):**
-
-- Body is not valid JSON
-- `imeis` array is missing or empty
-- `imei` is not exactly 15 digits or duplicated within the request
-
----
+One certificate per tenant, not per device. The certificate has `CN=<cvr>` and is signed by the GPS-Connector root CA; every device owned by the tenant connects to the MQTT broker with the same bundle. Which IMEIs a connection may publish for is resolved by the broker through the API's internal RabbitMQ auth backend, not by the certificate itself.
 
 ### `GET /tenant/cert`
 
-Privilege: `:read`. Returns metadata about the calling tenant's CA.
+Privilege: `:read`. Returns metadata about the calling tenant's certificate.
 
 **Response 200:**
 ```json
 {
-  "subject": "CN=Tenant CA 12345678,O=12345678",
+  "subject": "CN=12345678,O=12345678",
   "issuer": "CN=GPS-Connector Root CA",
   "serial": "6e07619c3cd74b816efafca47372f4e7",
   "not_before": "2026-05-06T09:19:13Z",
@@ -481,60 +448,51 @@ Privilege: `:read`. Returns metadata about the calling tenant's CA.
 
 `needs_rotation` is `true` when `days_until_expiry < 30`.
 
-Returns `404` if no tenant CA has been provisioned yet (tenant has never POSTed a device).
+Returns `404` if no certificate has been issued for the tenant yet.
 
 ---
 
-### `POST /tenant/cert/regenerate`
+### `POST /tenant/cert`
 
-Privilege: `:write`. Full PKI reset for the tenant.
-
-Generates a new tenant CA (overwriting the existing one), then regenerates device certificates for **every** device the tenant owns. Returns the new CA info plus a batch download for all the new device bundles.
+Privilege: `:admin`. Returns the tenant certificate bundle, issuing one if the tenant does not have a certificate yet. Calling it again for an existing certificate returns the same bundle — it does not rotate.
 
 **Request:** no body.
 
-**Response 200:**
-```json
-{
-  "ca": {
-    "subject": "CN=Tenant CA 12345678,O=12345678",
-    "issuer": "CN=GPS-Connector Root CA",
-    "serial": "...",
-    "not_before": "...",
-    "not_after": "...",
-    "days_until_expiry": 1825,
-    "needs_rotation": false
-  },
-  "results": [
-    { "imei": "123456789012345", "status": "regenerated" }
-  ],
-  "cert_download": {
-    "batch_id": "...",
-    "url": "/devices/certs/.../download",
-    "expires_at": "..."
-  }
-}
-```
+**Response 200** (`Content-Type: application/x-pem-file`, `Content-Disposition: attachment`):
+- Filename: `tenant-<cvr>.pem`
+- Contents: the 3-block PEM bundle described below.
 
-After this operation, all devices must be re-flashed with the new bundles. Old certs continue to work at the broker level until their natural expiry (which equals the previous tenant CA's `NotAfter`).
+---
 
-If the tenant has no devices yet, `results` is `[]` and `cert_download` is omitted — only the new tenant CA is provisioned.
+### `POST /tenant/cert/rotate`
+
+Privilege: `:admin`. Issues a new tenant certificate, replacing the stored one, and returns the new bundle in the same format as `POST /tenant/cert`.
+
+**Request:** no body.
+
+Every device must be re-flashed with the new bundle. The previous certificate keeps working at the broker until its natural expiry — there is no revocation.
 
 ---
 
 ## Certificate bundle format
 
-Each `<imei>.pem` in a download zip is a **4-block PEM bundle**, in order:
+`tenant-<cvr>.pem` is a **3-block PEM bundle**, in order:
 
 ```
------BEGIN PRIVATE KEY-----      ← PKCS#8 device private key
+-----BEGIN PRIVATE KEY-----      ← PKCS#8 tenant private key
 -----END PRIVATE KEY-----
------BEGIN CERTIFICATE-----      ← device cert (CN=<imei>, O=<cvr>)
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----      ← tenant CA (CN=Tenant CA <cvr>, O=<cvr>)
+-----BEGIN CERTIFICATE-----      ← tenant cert (CN=<cvr>, O=<cvr>)
 -----END CERTIFICATE-----
 -----BEGIN CERTIFICATE-----      ← root CA (CN=GPS-Connector Root CA)
 -----END CERTIFICATE-----
 ```
 
-Validity: device cert `NotAfter` matches the tenant CA's `NotAfter` — a fresh device cert today gets up to 5 years; a device cert issued late in the tenant CA's life gets less. Rotating the tenant CA forces all new devices onto a fresh expiry window.
+Validity is 5 years from issuance.
+
+---
+
+## Internal endpoints (not part of the public API)
+
+The API also serves `POST /auth/user`, `/auth/vhost`, `/auth/resource` and `/auth/topic` on a **separate port** (`MQAUTH_ADDR`, `:8081` in the cluster), implementing the `rabbitmq_auth_backend_http` contract. RabbitMQ calls these to decide whether a device connection may connect and which topics it may publish to, using the tenant certificate's `CN` and the IMEI-to-tenant mapping in Redis. Decisions are cached in Redis for 24 hours.
+
+This port is never exposed through ingress and takes no Keycloak JWT.

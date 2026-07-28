@@ -60,7 +60,7 @@ type archiveRow struct {
 }
 
 var csvHeader = []string{
-	"device_id", "time_index", "device_timestamp",
+	"imei", "time_index", "device_timestamp",
 	"latitude", "longitude", "speed", "heading",
 	"ignition", "moving",
 	"plate", "vehicle_id", "make", "model", "cost",
@@ -165,7 +165,7 @@ func rowToCSV(r archiveRow) []string {
 	}
 	return []string{
 		imei,
-		strconv.FormatInt(r.TimeIndex, 10),
+		time.UnixMilli(r.TimeIndex).UTC().Format(time.RFC3339),
 		formatI64(r.DeviceTimestamp),
 		formatF64(r.Latitude),
 		formatF64(r.Longitude),

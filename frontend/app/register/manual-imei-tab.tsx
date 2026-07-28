@@ -68,7 +68,7 @@ export function ManualImeiTab({ requireDevice, onSubmit }: Props) {
           />
           <Button type="submit" disabled={submitting}>
             {submitting ? <Spinner data-icon="inline-start" /> : null}
-            Generate
+            Register
           </Button>
         </div>
         {error ? (
