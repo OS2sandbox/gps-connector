@@ -7,6 +7,13 @@ import (
 	"os2/gps-connector/api/internal/respond"
 )
 
+// meResponse embeds the raw claims and adds the decoded privilege URNs so
+// clients do not have to base64/XML-decode the privileges claim themselves.
+type meResponse struct {
+	auth.Claims
+	PrivilegeURNs []string `json:"privilege_urns"`
+}
+
 func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
@@ -24,6 +31,6 @@ func handleMe() http.HandlerFunc {
 			http.Error(w, "no claims in context", http.StatusInternalServerError)
 			return
 		}
-		respond.JSON(w, http.StatusOK, c)
+		respond.JSON(w, http.StatusOK, meResponse{Claims: c, PrivilegeURNs: privs.URNs})
 	}
 }

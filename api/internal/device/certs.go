@@ -14,7 +14,7 @@ import (
 func HandleGetOrCreateTenantCert(certStore *pki.TenantCertStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		privs, ok := auth.PrivilegesFromContext(r.Context())
-		if !ok || !privs.Has("urn:dk:kombit:gps-connector:write") {
+		if !ok || !privs.Has("urn:dk:kombit:gps-connector:admin") {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -38,7 +38,7 @@ func HandleGetOrCreateTenantCert(certStore *pki.TenantCertStore) http.HandlerFun
 func HandleRotateTenantCert(certStore *pki.TenantCertStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		privs, ok := auth.PrivilegesFromContext(r.Context())
-		if !ok || !privs.Has("urn:dk:kombit:gps-connector:write") {
+		if !ok || !privs.Has("urn:dk:kombit:gps-connector:admin") {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
