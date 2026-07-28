@@ -36,6 +36,7 @@ type VehicleMetadata struct {
 
 type Device struct {
 	IMEI            string  `json:"imei"`
+	DeviceType      string  `json:"device_type,omitempty"`
 	Latitude        float64 `json:"latitude,omitempty"`
 	Longitude       float64 `json:"longitude,omitempty"`
 	Speed           float64 `json:"speed,omitempty"`
@@ -106,6 +107,7 @@ type entityStub struct {
 type orionEntity struct {
 	ID              string  `json:"id"`
 	Type            string  `json:"type"`
+	DeviceType      string  `json:"deviceType"`
 	Latitude        float64 `json:"latitude"`
 	Longitude       float64 `json:"longitude"`
 	Speed           float64 `json:"speed"`
@@ -147,6 +149,7 @@ func (c *Client) QueryDevices(tenant string) ([]Device, error) {
 	for _, e := range entities {
 		devices = append(devices, Device{
 			IMEI:            strings.TrimPrefix(e.ID, "urn:ngsi-ld:GPSTracker:"),
+			DeviceType:      e.DeviceType,
 			Latitude:        e.Latitude,
 			Longitude:       e.Longitude,
 			Speed:           e.Speed,
