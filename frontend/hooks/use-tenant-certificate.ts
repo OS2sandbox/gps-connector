@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { getTenantCertificate, type TenantCertificate } from "@/lib/gps-client"
 
@@ -10,15 +10,18 @@ type State = {
   loaded: boolean
 }
 
-export function useTenantCertificate(): State {
+export function useTenantCertificate() {
   const [state, setState] = useState<State>({
     data: null,
     error: null,
     loaded: false,
   })
+  const abortRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    abortRef.current?.abort()
     const controller = new AbortController()
+    abortRef.current = controller
     getTenantCertificate(controller.signal)
       .then((data) => {
         if (controller.signal.aborted) return
@@ -32,8 +35,17 @@ export function useTenantCertificate(): State {
           loaded: true,
         })
       })
-    return () => controller.abort()
   }, [])
 
-  return state
+  useEffect(() => {
+    load()
+    return () => abortRef.current?.abort()
+  }, [load])
+
+  return {
+    data: state.data,
+    error: state.error,
+    loaded: state.loaded,
+    refresh: load,
+  }
 }

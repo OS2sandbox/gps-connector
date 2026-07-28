@@ -46,7 +46,6 @@ function deviceToRecord(device: Device): DeviceRecord {
   return {
     imei: device.imei,
     gpsDevice: device.device_type ?? null,
-    certificateDownload: null,
     vehicle,
   }
 }

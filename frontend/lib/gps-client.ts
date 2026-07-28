@@ -34,11 +34,6 @@ export type RegisterDeviceInput = {
   device_type: string
 }
 
-export type CertificateDownloadPayload = {
-  batch_id: string
-  expires_at: string
-}
-
 export type RegisterResult = {
   imei: string
   status: "created" | "already_registered" | "error"
@@ -51,7 +46,6 @@ export type RegisterResponse = {
     subscriptions_created?: string[]
   }
   results: RegisterResult[]
-  cert_download?: CertificateDownloadPayload
 }
 
 export type TenantCertificate = {
@@ -62,6 +56,23 @@ export type TenantCertificate = {
   not_after: string
   days_until_expiry: number
   needs_rotation: boolean
+}
+
+export const ADMIN_PRIVILEGE = "urn:dk:kombit:gps-connector:admin"
+
+export type Me = {
+  sub: string
+  cvr: string
+  idp: string
+  privilege_urns: string[]
+}
+
+export async function getMe(signal?: AbortSignal): Promise<Me> {
+  const res = await fetch("/api/gps/me", { signal, cache: "no-store" })
+  if (!res.ok) {
+    throw new Error(`me: ${res.status} ${await res.text()}`)
+  }
+  return (await res.json()) as Me
 }
 
 export async function getDevices(signal?: AbortSignal): Promise<Device[]> {
@@ -136,20 +147,31 @@ export type PatchResponse = {
   results: PatchResult[]
 }
 
-export async function patchDeviceMetadata(
-  imei: string,
+export type MetadataUpdate = {
+  imei: string
   metadata: DeviceMetadata
+}
+
+export async function patchDeviceMetadataBulk(
+  updates: MetadataUpdate[]
 ): Promise<PatchResponse> {
   const res = await fetch("/api/gps/devices", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ updates: [{ imei, metadata }] }),
+    body: JSON.stringify({ updates }),
     cache: "no-store",
   })
   if (!res.ok) {
     throw new Error(`devices: ${res.status} ${await res.text()}`)
   }
   return (await res.json()) as PatchResponse
+}
+
+export function patchDeviceMetadata(
+  imei: string,
+  metadata: DeviceMetadata
+): Promise<PatchResponse> {
+  return patchDeviceMetadataBulk([{ imei, metadata }])
 }
 
 export type DeleteResult = {
@@ -186,13 +208,33 @@ export async function getTenantCertificate(
   return (await res.json()) as TenantCertificate
 }
 
-export async function fetchCertificateZip(batchId: string): Promise<Blob> {
-  const res = await fetch(
-    `/api/gps/devices/certs/${encodeURIComponent(batchId)}/download`,
-    { cache: "no-store" }
-  )
+export type CertificateBundle = {
+  blob: Blob
+  filename: string
+}
+
+const DEFAULT_CERTIFICATE_FILENAME = "tenant-certificate.pem"
+
+function filenameFromDisposition(header: string | null): string {
+  const match = header?.match(/filename="?([^";]+)"?/)
+  return match?.[1] ?? DEFAULT_CERTIFICATE_FILENAME
+}
+
+async function postCertificateBundle(path: string): Promise<CertificateBundle> {
+  const res = await fetch(path, { method: "POST", cache: "no-store" })
   if (!res.ok) {
-    throw new Error(`certificate download: ${res.status} ${await res.text()}`)
+    throw new Error(`tenant certificate: ${res.status} ${await res.text()}`)
   }
-  return await res.blob()
+  return {
+    blob: await res.blob(),
+    filename: filenameFromDisposition(res.headers.get("Content-Disposition")),
+  }
+}
+
+export function fetchTenantCertificate(): Promise<CertificateBundle> {
+  return postCertificateBundle("/api/gps/tenant/cert/download")
+}
+
+export function rotateTenantCertificate(): Promise<CertificateBundle> {
+  return postCertificateBundle("/api/gps/tenant/cert/rotate")
 }

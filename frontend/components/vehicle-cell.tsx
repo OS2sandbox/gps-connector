@@ -14,12 +14,9 @@ export function VehicleCell({ vehicle, onAttach }: Props) {
       </Button>
     )
   }
-  const { plate, make, model } = vehicle
-  const makeModel = `${make} ${model}`.trim()
-  return (
-    <div className="flex items-center gap-2 text-sm">
-      <span className="font-mono font-medium tracking-wide">{plate}</span>
-      {makeModel && <span className="text-muted-foreground">{makeModel}</span>}
-    </div>
-  )
+  const makeModel = `${vehicle.make} ${vehicle.model}`.trim()
+  if (!makeModel) {
+    return <span className="text-muted-foreground">-</span>
+  }
+  return <span className="text-sm">{makeModel}</span>
 }

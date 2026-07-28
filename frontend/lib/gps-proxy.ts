@@ -75,10 +75,10 @@ export async function proxyToBackend(
         status: upstream.status,
       })
     }
-    return new NextResponse(upstream.body, {
-      status: upstream.status,
-      headers: { "Content-Type": contentType },
-    })
+    const headers: Record<string, string> = { "Content-Type": contentType }
+    const disposition = upstream.headers.get("content-disposition")
+    if (disposition) headers["Content-Disposition"] = disposition
+    return new NextResponse(upstream.body, { status: upstream.status, headers })
   } catch (err) {
     if (err instanceof ProxyError) {
       return new NextResponse(err.message, { status: err.status })
